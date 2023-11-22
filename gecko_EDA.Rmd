@@ -1,0 +1,300 @@
+---
+title: "Gecko"
+author: "Rong Guang"
+date: "2023-11-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Read in data
+
+```{r}
+#read data
+library(tidyverse)
+library(here)
+gecko_full_vars <- read_csv("Dataframe.csv")
+```
+## Select variables for modelling
+
+SELECT variables for modeling into object `gecko`. Variable names are mostly the original ones, except that:
+    
+    - all `()` are turned into `_`, e.g. "hydroxyl (alkyl)" turned into hydroxyl_alkyl
+    
+    - all spaces are turned into `_`, e.g. "aromatic(hydroxyl)" turned into aromatic_hydroxyl
+    
+    - two special cases are : now "C=C-C=O in non-aromatic ring" is "ccco", and  "C=C (non-aromatic)" is "cc",. 
+
+```{r}
+# SELECT variables into object `gecko`
+gecko <- 
+  gecko_full_vars |> 
+  dplyr::select(
+    id = index,           #A unique molecule index used in naming files
+    MW,                   #The molecular weight of the molecule (g/mol).
+    pSat_Pa,              #The saturation vapour pressure of the molecule calculated by COSMOtherm (Pa)
+    NumOfAtoms,           #The number of atoms in the molecule
+    NumOfC,               #The number of carbon atoms in the molecule
+    NumOfO,               #The number of oxygen atoms in the molecul
+    NumOfN,               #The number of nitrogen atoms in the molecule
+    NumHBondDonors,       #“The number of hydrogen bond donors in the molecule, i.e. hydrogens bound to oxygen.”
+    NumOfConf,            #The number of stable conformers found and successfully calculated by COSMOconf.
+    NumOfConfUsed,        #The number of conformers used to calculate the thermodynamic properties.
+    parentspecies,        #Either “decane”, “toluene”, “apin” for alpha-pinene or a combination of these connected by an underscore to indicate ambiguous                           #descent. In 243 cases, the parent species is “None” because it was not possible to retrieve it.
+    
+    cc =                  #The number of non-aromatic C=C bounds found in the molecule.
+      "C=C (non-aromatic)", 
+    
+    ccco =               #The number of “C=C-C=O” structures found in non-aromatic rings in the molecule.
+      "C=C-C=O in non-aromatic ring",
+    
+    hydroxyl_alkl =      #The number of the alkylic hydroxyl groups found in the molecule.
+      "hydroxyl (alkyl)",
+    
+    aldehyde,            #The number of aldehyde groups in the molecule.
+    ketone,              #The number of ketone groups in the molecule.
+    
+    carboxylic_acid =    #The number of carboxylic acid groups in the molecule.
+      "carboxylic acid",
+    ester,               #The number of ester groups in the molecule.
+    
+    ether_alicyclic =    #The number of alicyclic ester groups in the molecule.
+      "ether (alicyclic)",
+    nitrate,             #The number of alicyclic nitrate groups in the molecule
+    nitro,               #The number of nitro ester groups in the molecule
+    
+    aromatic_hydroxyl =
+    "aromatic hydroxyl", #The number of alicyclic aromatic hydroxyl groups in the molecule.
+    
+    carbonylperoxynitrate, #The number of carbonylperoxynitrate groups in the molecule.
+    peroxide,            #The number of peroxide groups in the molecule
+    hydroperoxide,       #The number of hydroperoxide groups in the molecule.
+    carbonylperoxyacid,  #The number of carbonylperoxyacid groups found in the molecule
+    nitroester           #The number of nitroester groups found in the molecule
+  )
+```
+
+## Assign variable labels
+
+```{r}
+library(labelled)
+var_label(gecko) <- 
+  c(
+    " A unique molecule index used in naming files",
+    "The molecular weight of the molecule (g/mol)",
+    "The saturation vapour pressure of the molecule calculated by COSMOtherm (Pa)",
+    "The number of atoms in the molecule",
+    "The number of carbon atoms in the molecule",
+    "The number of oxygen atoms in the molecul",
+    "The number of nitrogen atoms in the molecule",
+    "The number of hydrogen bond donors in the molecule, i.e. hydrogens bound to oxygen.",
+    "The number of stable conformers found and successfully calculated by COSMOconf.",
+    "The number of conformers used to calculate the thermodynamic properties.",
+    "Either “decane”, “toluene”, “apin” for alpha-pinene or a combination of these connected by an underscore to indicate ambiguousdescent. In 243 cases, the parent species is “None” because it was not possible to retrieve it.",
+    "The number of non-aromatic C=C bounds found in the molecule.",
+    "The number of “C=C-C=O” structures found in non-aromatic rings in the molecule.",
+    "The number of the alkylic hydroxyl groups found in the molecule",
+    "The number of aldehyde groups in the molecule.",
+    "The number of ketone groups in the molecule.",
+    "The number of carboxylic acid groups in the molecule.",
+    "The number of ester groups in the molecule.",
+    "The number of alicyclic ester groups in the molecule.",
+    "The number of alicyclic nitrate groups in the molecule",
+    "The number of nitro ester groups in the molecule",
+    "The number of alicyclic aromatic hydroxyl groups in the molecule.",
+    "The number of carbonylperoxynitrate groups in the molecule.",
+    "The number of peroxide groups in the molecule",
+    "The number of hydroperoxide groups in the molecule.",
+    "The number of carbonylperoxyacid groups found in the molecule",
+    "The number of nitroester groups found in the molecule"
+  )
+```
+
+```{r}
+# use example
+var_label(gecko$carboxylic_acid)
+```
+
+## Varible type
+
+```{r}
+var.type <- gecko |> map(class) |> unlist() |> data.frame()
+names(var.type) <- "var_type"
+var.type
+```
+
+## Handle categorical variables
+
+Find character variable
+
+```{r}
+var.type |> 
+  filter(
+    var_type == "character"
+  )
+```
+
+Examine it
+
+```{r}
+gecko$parentspecies |> table()
+```
+
+One hot encoding:
+
+```{r}
+library(fastDummies)
+
+#extract categorical variable 
+category_var <- gecko[,c("id", "parentspecies")]
+
+#one hot encoding
+gecko_cat <- category_var |> fastDummies::dummy_cols(select_columns = "parentspecies")
+
+#for convenience of visualization, numeric variables are filtered out:
+gecko_num <- 
+  gecko |> 
+  dplyr::select(
+    -parentspecies
+  )
+```
+
+
+## Visualize numeric variables
+
+### Box plot
+
+```{r, fig.height= 5, fig.width= 8}
+gecko_num[,-1] |> 
+  pivot_longer(
+    everything(),
+    values_to = "values",
+    names_to = "variables"
+    ) |> 
+  ggplot(
+    aes(x = values)
+  ) +
+  geom_boxplot() +
+  facet_wrap(
+    ~variables, 
+    scales = "free"
+  )+
+  theme_bw()
+```
+
+### Histogram
+
+```{r, fig.height= 5, fig.width= 8}
+gecko_num[,-1] |> 
+  pivot_longer(
+    everything(),
+    values_to = "values",
+    names_to = "variables"
+    ) |> 
+  ggplot(
+    aes(x = values)
+  ) +
+  geom_histogram() +
+  facet_wrap(
+    ~variables, 
+    scales = "free"
+  )+
+  theme_bw()
+```
+
+## Log/exp transformation for non-normal data
+
+### NumOfConf and MW
+
+The distribution of `NumOfConf` is skewed.
+
+```{r}
+NumOfConf.dist.a <- 
+  gecko_num |> 
+  ggplot(aes(x = NumOfConf^0.3)) +
+  geom_qq()
+
+NumOfConf.dist.b <- 
+  gecko_num |> 
+  ggplot(aes(sample = NumOfConf^0.3)) +
+  geom_qq()
+```
+
+```{r}
+gecko_num <- 
+  gecko_num |> 
+  mutate(NumOfConf_exp = NumOfConf^0.3)
+```
+
+```{r}
+gecko_num |> 
+  ggplot(aes(sample = NumOfConf^0.3)) +
+  geom_qq()
+```
+
+
+### check
+
+```{r}
+gecko_num |> 
+  ggplot(aes(x = NumOfConf |> log()))+
+  geom_histogram(binwidth = 1)
+
+```
+
+
+
+
+
+```{r}
+gecko$peroxide |> table()
+var_label(gecko$hydroperoxide)
+```
+
+## handle missing values
+
+There is no missing values in our data 
+
+```{r fig.width=8, fig.height=4}
+library(naniar)
+vis_miss(gecko_num)
+```
+
+## Handle out-liers
+
+```{r}
+gecko_num_scaled <- scale(gecko_num[,-1]) |> data.frame()
+
+gecko_num_scaled |> 
+  mutate(id = gecko_num$id) |> 
+  select(id, everything())
+```
+
+```{r}
+gecko_num_scaled |> 
+  filter(abs(MW) > 3.29) |> 
+  select (MW)
+```
+
+MW; NumOfAtoms; NumOfConf; NumOfO
+
+```{r}
+gecko_num_scaled |>
+  select(
+    MW,
+    NumOfAtoms,
+    NumOfConf,
+    NumOfO
+  ) |> 
+  apply(2, function(x)sum(abs(x)>3.29))
+```
+
+```{r}
+
+```
+
+
+
+
