@@ -73,6 +73,11 @@ gecko <-
     hydroperoxide,       #The number of hydroperoxide groups in the molecule.
     carbonylperoxyacid,  #The number of carbonylperoxyacid groups found in the molecule
     nitroester           #The number of nitroester groups found in the molecule
+  ) |> 
+  dplyr::select(    # move response variable to the front
+    id,
+    pSat_Pa,
+    everything()
   )
 ```
 
@@ -125,7 +130,7 @@ names(var.type) <- "var_type"
 var.type
 ```
 
-## Handle categorical variables
+## Handle discrete variables
 
 Find character variable
 
@@ -161,8 +166,9 @@ gecko_num <-
   )
 ```
 
+## Visualize variables recorded in numbers
 
-## Visualize numeric variables
+All remaining variables (after separating out categorical varialbe `parentspecies`) were recorded using numeric values. They are visualized and examined for further decisions.
 
 ### Box plot
 
@@ -204,54 +210,219 @@ gecko_num[,-1] |>
   theme_bw()
 ```
 
-## Log/exp transformation for non-normal data
+## Separate ordinal and continuous variables
 
-### NumOfConf and MW
+According to the visualiztion and variable explanation, most of the remaining variables can be either continuous or ordinal. For the purpose of this analysis, we set an arbitrary rule that any of these variables with number of unique values $<$ 50 will be treated as ordinal variables, whereas others as continuous variables. 
 
-The distribution of `NumOfConf` is skewed.
+We first tabulate the number of unique values for each variable.
 
 ```{r}
-NumOfConf.dist.a <- 
+n.of.unique <- 
   gecko_num |> 
-  ggplot(aes(x = NumOfConf^0.3)) +
-  geom_qq()
-
-NumOfConf.dist.b <- 
-  gecko_num |> 
-  ggplot(aes(sample = NumOfConf^0.3)) +
-  geom_qq()
+  map(table) |> 
+  map(length) |> 
+  unlist() |> 
+  data.frame() |> 
+  rename("Number of unique values" = 1) 
+n.of.unique
 ```
+
+These variables have the number of unique values $<$ 50. They are treated as ordinal. In many cases, preserving the ordinal nature of the data is more important than achieving normality, especially when the order represents a critical aspect of the data's meaning. Therefore, they will not undergo transformation to normality.
+
+```{r}
+ordinal.var.names <- n.of.unique |> filter(`Number of unique values` < 50) |> rownames()
+#turn ordinal data into factor
+gecko_num <- 
+  gecko_num |> 
+    mutate(across(all_of(ordinal.var.names), factor))
+  
+```
+
+These variables have the number of unique values $\ge$ 10. They are treated as continuous. 
+
+```{r}
+continuous.var.names <- 
+  n.of.unique |> 
+  filter(`Number of unique values` >= 50) |> 
+  rownames() |> 
+  stringr::str_remove_all("id")
+```
+
+##Transform continuous variable into normality
+
+Logarithmic or exponential transformation will be considered for their approximating normal distribution.
+
+### Check intial distributiopn
+
+These variables are treated as continuous. They look skewed, to different extent.
+
+```{r}
+gecko_num |> 
+  select(one_of(continuous.var.names)) |> 
+  pivot_longer(everything(), names_to = "variable", values_to = "value") |> 
+  ggplot(
+    aes(x = value)
+  )+
+  geom_histogram() +
+  facet_wrap(~variable, scales = "free")+
+  theme_bw()
+```
+
+### Log/exp transformation of `NumOfConf`
+
+The distribution of `NumOfConf` is skewed. Take NumOfConf to the power of 0.3. 
 
 ```{r}
 gecko_num <- 
   gecko_num |> 
-  mutate(NumOfConf_exp = NumOfConf^0.3)
+  mutate(trans_NumOfConf = NumOfConf^0.3)
+
+var_label(gecko_num$trans_NumOfConf) <- "NumOfConf^0.3 transformation"
 ```
 
+Compare before and after transformation
+
 ```{r}
-gecko_num |> 
+NumOfConf.distr.a <- 
+  gecko_num |> 
+  ggplot(aes(x = NumOfConf)) +
+  geom_histogram()+
+  labs(title = "Histogram before transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+
+NumOfConf.distr.b <- 
+  gecko_num |> 
+  ggplot(aes(sample = NumOfConf)) +
+  geom_qq()+
+  labs(title = "QQ plot after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+```
+
+
+```{r}
+NumOfConf.distr.c <- 
+  gecko_num |> 
+  ggplot(aes(x = NumOfConf^0.3)) +
+  geom_histogram()+
+  labs(title = "Histogram after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+
+NumOfConf.distr.d <- 
+  gecko_num |> 
   ggplot(aes(sample = NumOfConf^0.3)) +
-  geom_qq()
+  geom_qq()+
+  labs(title = "QQ plot after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
 ```
 
+Check distribution of the new variable. It approximates normality:
 
-### check
+```{r }
+library(patchwork)
+(NumOfConf.distr.a|NumOfConf.distr.b)/
+  (NumOfConf.distr.c|NumOfConf.distr.d)+plot_annotation(
+  title = 'Variable NumOfConf before and after transfromation')
+```
+
+### Log/exp transformation of `MW`
+
+The distribution of `MW` is slightly skewed. Take NumOfConf to the power of 0.3. 
 
 ```{r}
-gecko_num |> 
-  ggplot(aes(x = NumOfConf |> log()))+
-  geom_histogram(binwidth = 1)
+gecko_num <- 
+  gecko_num |> 
+  mutate(trans_MW = MW^0.5)
 
+var_label(gecko_num$trans_MW) <- "MW^0.5 transformation"
 ```
 
+Compare before and after transformation
 
+```{r}
+MW.distr.a <- 
+  gecko_num |> 
+  ggplot(aes(x = MW)) +
+  geom_histogram()+
+  labs(title = "Histogram before transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
 
+MW.distr.b <- 
+  gecko_num |> 
+  ggplot(aes(sample = MW)) +
+  geom_qq()+
+  labs(title = "QQ plot after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+```
 
 
 ```{r}
-gecko$peroxide |> table()
-var_label(gecko$hydroperoxide)
+MW.distr.c <- 
+  gecko_num |> 
+  ggplot(aes(x = MW^0.5)) +
+  geom_histogram()+
+  labs(title = "Histogram after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+
+MW.distr.d <- 
+  gecko_num |> 
+  ggplot(aes(sample = MW^0.5)) +
+  geom_qq()+
+  labs(title = "QQ plot after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
 ```
+
+Check distribution of the new variable. It approximates normality:
+
+```{r }
+library(patchwork)
+(MW.distr.a|MW.distr.b)/
+  (MW.distr.c|MW.distr.d)+plot_annotation(
+  title = 'Variable MW before and after transfromation')
+```
+
+
+
+
+
+## Scaling
+
+```{r}
+# scale all columns except id
+gecko_num_scaled <- scale(gecko_num[,-1]) |> data.frame()
+# add id column
+gecko_num_scaled <- 
+  gecko_num_scaled |> 
+  mutate(id = gecko_num$id) |> 
+  select(id, everything())
+```
+
+
+```{r, fig.height= 5, fig.width= 8}
+gecko_num_scaled[,-1] |> 
+  pivot_longer(
+    everything(),
+    values_to = "values",
+    names_to = "variables"
+    ) |> 
+  ggplot(
+    aes(x = values)
+  ) +
+  geom_histogram() +
+  facet_wrap(
+    ~variables, 
+    scales = "free"
+  )+
+  theme_bw()
+```
+
 
 ## handle missing values
 
@@ -262,23 +433,223 @@ library(naniar)
 vis_miss(gecko_num)
 ```
 
+## Correlation matrix
+
+```{r}
+#define functions that allow for fine-tuning GGally matrix aesthetics.
+my.fun.density <- function(data, mapping, ...) { #notes are roughly same with above
+  
+  ggplot(data = data, mapping = mapping) +
+    geom_histogram(aes(y=..density..),
+                   color = "black", 
+                   fill = "white")+
+    geom_density(fill = "#FF6666", alpha = 0.25) +
+    theme(panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          panel.background = element_rect(fill = "lightblue",
+                                          color = "black"))
+} 
+
+#define a function that allows me to fine-tune the matrix
+my.fun.smooth <- function(data,    #my function needs 3 arguments
+                          mapping,
+                          method = "loess"){
+  
+  ####
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  
+  coef <- cor(x, y, method= "spearman", use='complete.obs')
+  
+  corr <- cor.test(x, y)
+  
+  corr.p <- corr$p.value
+  
+  match <- c(rep("yellow", 5), rep("wheat", 95))
+  fill <- match[findInterval(corr.p, seq(0, 1, length = 100))]
+  
+  match2 <- c(rep("black", 30), rep("firebrick", 70))
+  color <- match2[findInterval(abs(coef), seq(0, 1, length = 100))]
+  
+  match.size <- c(rep(1.5, 30), rep(2.5, 70))
+  size <- match.size[findInterval(abs(coef), seq(0, 1, length = 100))]
+  
+  ###
+  ggplot(data = data, #data is passed from ggpairs' arguments
+         mapping = mapping)+#aes is passed from ggpairs' arguments
+    geom_point(size = 0.3,  #draw points
+               color = "blue")+
+    geom_smooth(method = method,  #fit a linear regression
+                size = 0.3, 
+                color = "red")+
+    theme(panel.grid.major = element_blank(), #get rid of the grids
+          panel.grid.minor = element_blank(),
+          panel.background = element_rect(fill = fill, #adjust background #F0E442
+                                          color = color,
+                                          size = size
+                                          ))
+} 
+```
+
+```{r}
+# define a function allowing for adjusting text, frame color and panel background of ggpairs
+cor_func <- function(data, mapping, method, symbol, ...){
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  
+  coef <- cor(x, y, method=method, use='complete.obs')
+  
+  corr <- cor.test(x, y)
+  
+  corr.p <- corr$p.value
+  
+  colFn <- colorRampPalette(c("yellow", "white", "dodgerblue"), 
+                            interpolate ='spline')
+  
+  #colFn2 <- colorRampPalette(c("firebrick", "firebrick", "firebrick"), 
+  #                          interpolate ='spline')
+  
+  rampcols <- colFn(100)
+  #rampcols2 <- colFn2(100)
+  
+  match <- c(rampcols[1:5], rep("#FFFFFF", 95))
+  fill <- match[findInterval(corr.p, seq(0, 1, length = 100))]
+  
+  match2 <- c(rep("black", 30), rep("firebrick", 70))
+  fill2 <- match2[findInterval(abs(coef), seq(0, 1, length = 100))]
+  
+  match.size <- c(rep(1.5, 30), rep(2.5, 70))
+  size <- match.size[findInterval(abs(coef), seq(0, 1, length = 100))]
+  
+  ggally_text(
+    label = paste(symbol, as.character(round(coef, 3))), 
+    mapping = aes(),
+    xP = 0.5, yP = 0.5,
+    color = 'black',
+    ...) + 
+    theme_void() +
+    theme(panel.background = element_rect(fill = fill, color = fill2, size = size))
+}
+```
+
+
+```{r fig.height= 6, fig.width= 10}
+library(GGally)
+#estimate confi with information seeking 1:7
+gecko_num_scaled_no_outliers |> 
+  dplyr::select(
+    2:4
+    ) |> 
+  ggpairs(lower = 
+            list(continuous = my.fun.smooth), #lower half show points with fitted line
+          diag =
+            list(continuous = my.fun.density), #diagonal grids show density plots
+          upper =
+            list(continuous = wrap(cor_func,method = 'spearman', symbol = "Corr:\n")),
+          labeller = label_wrap_gen(14)
+          ) +
+   theme (
+    plot.title = 
+      element_text(
+        size = 12,  #adjust title visuals
+        face = "bold"
+        ),
+    plot.caption = 
+      element_text(
+        color = "red", 
+        face = "italic", 
+        size = 10),
+    strip.background = 
+      element_rect(
+        color = "black", 
+        fill = "lightblue", 
+        size = 2
+        ),
+    strip.text.y = 
+      element_text(
+        angle = 0, 
+        size = 9, 
+        face = "bold", 
+        color = "black"),
+    strip.text.x = 
+      element_text(
+        angle = 0, 
+        size = 9, 
+        face = "bold", 
+        color = "black"
+        )
+    ) +
+  labs(
+  caption = "Regressed by lowess;
+                  Red frame indicates |r|>0.3; Yellow background indicates significant p",
+  title = "Figure. Correlation matrix for response variables (first 7 cols/rows) and potential predictors")
+```
+
+
+```{r}
+gecko_num_scaled |> 
+  dplyr::select(
+    2:4
+    ) |> pairs()
+
+gecko|> 
+  ggplot(aes(x = pSat_Pa)) +
+  geom_histogram(
+   # binwidth = 0.1
+    )
+
+gecko_num_scaled$pSat_Pa |> mean()
+gecko_num_scaled$pSat_Pa |> sd()
+gecko_num_scaled$pSat_Pa |> median()
+```
+
+
+
+
+
+
+
 ## Handle out-liers
 
-```{r}
-gecko_num_scaled <- scale(gecko_num[,-1]) |> data.frame()
 
-gecko_num_scaled |> 
-  mutate(id = gecko_num$id) |> 
-  select(id, everything())
-```
 
 ```{r}
 gecko_num_scaled |> 
-  filter(abs(MW) > 3.29) |> 
-  select (MW)
+  filter(abs(pSat_Pa) > 0.1) |> 
+  select (pSat_Pa)
 ```
 
-MW; NumOfAtoms; NumOfConf; NumOfO
+```{r}
+gecko_num_scaled_no_outliers <- 
+  gecko_num_scaled |> 
+  filter(abs(pSat_Pa) < 3.29)
+```
+
+```{r}
+gecko_num$pSat_Pa |> hist()
+gecko_num$pSat_Pa |> log() |> hist()
+gecko_num$nitroester |> table()
+a <- gecko_num |> 
+  select(
+    -id,
+    -pSat_Pa,
+    -MW,
+    -NumOfConf,
+    -NumOfConf_exp
+  )|>
+  map(table) 
+
+for (i in 1:length(a)){
+  name = names(a)[i]
+  data = a[[i]]
+  name = a[i] |> names()
+  barplot(data, main = paste("Value distribution of variable:", name))
+}
+
+```
+
+
+MW; NumOfAtoms; NumOfConf; NumOfO; pSat_Pa
 
 ```{r}
 gecko_num_scaled |>
@@ -289,6 +660,37 @@ gecko_num_scaled |>
     NumOfO
   ) |> 
   apply(2, function(x)sum(abs(x)>3.29))
+```
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
 ```
 
 ```{r}
