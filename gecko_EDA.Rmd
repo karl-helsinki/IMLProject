@@ -1,12 +1,12 @@
 ---
-title: "Gecko"
+title: "Gecko Pre-processing, Final Project, Introduction to Machine Learning"
 author: "Rong Guang"
 date: "2023-11-20"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = T, warning = F)
 ```
 
 ## Read in data
@@ -92,6 +92,15 @@ They are described in chronological order:
      
      - Be cautious using them. (Maybe) start by not using them. 
      
+  - Some use case are demonstrated. e.g select the most preferred variables.  
+  
+     - For comprehensiveness the final data set included both original variables and generated variables.
+     
+     - Created variables start with `new_` in names. They are not recommended to be included for modelling.
+     
+     - Continuous variables were transformed to appraoch normaility. The transformed ones have `trans_` in names.
+     
+     - One discrete variable `parentspecies` has one hot encoding alternatives, which have `ohe_` in names.
 
 ```{r}
 #read data
@@ -952,6 +961,8 @@ knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig4.png"))
 
 ## Creating new variables 
 
+### Create MW and hydroxyl_alkl_interaction interaction
+
 Interaction between molecular weight and the number of hydroxyl groups might jointly affect the vapor pressure. An variable is created for capturing this interaction
 
 ```{r}
@@ -963,6 +974,8 @@ gecko_num_scaled <-
 
 var_label(gecko_num_scaled$new_MW_hydroxyl_alkl_interaction) <- "Interaction between molecular weight and the number of hydroxyl groups "
 ```
+
+### Create Polarity
 
 Polarity is a key factor in vapor pressure. I estimate the size of polarity by assigning different weights to relevant functional group.
 
@@ -978,22 +991,29 @@ gecko_num_scaled <-
           2 * ketone + 
           2 * ester + 
           3 * nitro
-        )
+        )^0.4 # it is further taken to the power of 0.4, for approximating normaility
   )
 ```
 
+### Dimensionality reduction
+
+All variables with "Num" in names showed high co-linearity in the correlation matrix. Here we try to condense them into a reduced number of variables. 
 
 ```{r}
+
+# all vars with "Num" in name
 num.vars <- gecko_num_scaled |> 
   dplyr::select(
     contains("Num")&!contains("trans")
   ) 
 
+# do PCA
 pca_result <- prcomp(num.vars)
 
-summary(pca_result)
+#turn first two principal components into values (they explained 61.24% variability)
 pca.vars <- pca_result$x[,1:2] |> data.frame()
 
+#save the two components into the data
 gecko_num_scaled <-  
   gecko_num_scaled |> 
   mutate(
@@ -1005,6 +1025,28 @@ gecko_num_scaled <-
 Check their correlation with response variable:
 
 ```{r}
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr")
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, 
+         #cex = cex.cor * r
+         )
+}
+
 gecko_num_scaled |> 
   dplyr::select(
     trans_pSat_Pa,
@@ -1012,9 +1054,13 @@ gecko_num_scaled |>
   ) |> 
   pairs(
     lower.panel = panel.smooth,
+    upper.panel = panel.cor,
+    diag.panel = panel.hist,
     main = "Correlation matrix of the newly-created variable and response variable"
     )
 ```
+
+Bring back discrete data. 
 
 ```{r}
 gecko_ml <- 
@@ -1023,8 +1069,9 @@ gecko_ml <-
     gecko_cat,
     by = "id"
   )
-gecko_ml |> names()
 ```
+
+## Introduce full features in data
 
 ```{r codebook}
 gecko_ml <- 
@@ -1071,7 +1118,11 @@ gecko_ml |>
     nitroester,          #The number of nitroester groups found in the molecule
     parentspecies,       #Either “decane”, “toluene”, “apin” for alpha-pinene or a combination of                                          #these connected by an underscore to indicate ambiguous descent.          
                          #In 243 cases, the parent species is “None” because it was not possible to                                        # retrieve it.
-                        
+       
+    #####above are original variables (but scaled)
+    
+    #####below are transformed or created variables (also scaled)
+                    
     trans_NumOfConf,    # NumOfConf to the power of 0.3           
     trans_MW,           # Square root of trans_MW              
     trans_pSat_Pa,      # log transformed pSat_Pa                  
@@ -1154,7 +1205,7 @@ write_rds(gecko_ml, "data/gecko_ml.rds")
 
 To select all original variables (scaled)
 
-```{r}
+```{r eval = F}
 gecko_ml |> 
   dplyr::select(
     -starts_with(
@@ -1171,7 +1222,7 @@ gecko_ml |>
 
 To select all original variables (scaled) but use the transformed continuous variables (preferred). `Note` that meanwhile we need to remove the corresponding original variables.
 
-```{r}
+```{r eval = F}
 gecko_ml |> 
   dplyr::select(
     -NumOfConf, #These 3 variables are continuous and have transformed version
@@ -1182,7 +1233,7 @@ gecko_ml |>
 
 To select all original variables (scaled) but use the transformed continuous variables (preferred). `And` also use one hot encoding variables to replace the original multiple level variable `parentspecies`. 
 
-```{r}
+```{r eval = F}
 gecko_ml |> 
   dplyr::select(
     -NumOfConf,
@@ -1194,7 +1245,7 @@ gecko_ml |>
 
 To select all original variables (scaled) but use the transformed continuous variables (preferred). `And` also use one hot encoding variables to replace the original multiple level variable `parentspecies`. Further, remove the newly created variables. `I belive this is the most preferred set for our machine learning task`
 
-```{r}
+```{r eval = F}
 gecko_ml |> 
   dplyr::select(
     -NumOfConf,
