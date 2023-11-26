@@ -582,6 +582,7 @@ gecko_num_scaled |>
   filter(abs(trans_NumOfConf) > 3.29)|> nrow()
 ```
 
+
 ## Correlation matrix
 
 Correlation matrix for all continuous  (before and after transformation)  and ordinal variablesare created as references for machine learning. Due to the number of variables, we separate it into four matrices. For each matrix, the first two rows/columns are always the response variable `pSat_Pa` and its log transformed variable `trans_pSat_Pa`
@@ -968,7 +969,7 @@ Interaction between molecular weight and the number of hydroxyl groups might joi
 gecko_num_scaled <- 
   gecko_num_scaled |> 
   mutate(
-    new_MW_hydroxyl_alkl_interaction = scale(MW * hydroxyl_alkl)
+    new_MW_hydroxyl_alkl_interaction = scale(MW * hydroxyl_alkl) |> as.numeric()
   )
 
 var_label(gecko_num_scaled$new_MW_hydroxyl_alkl_interaction) <- "Interaction between molecular weight and the number of hydroxyl groups "
@@ -990,7 +991,8 @@ gecko_num_scaled <-
           2 * ketone + 
           2 * ester + 
           3 * nitro)
-        ) # it is further taken to the power of 0.4, for approximating normaility
+        ) |> # it is further taken to the power of 0.4, for approximating normaility
+      as.numeric()
   )
 ```
 
@@ -1197,7 +1199,12 @@ var_label(gecko_ml$carboxylic_acid)
 ```
 
 ```{r}
+gecko_ml <- gecko_ml |> data.frame()
 write_rds(gecko_ml, "data/gecko_ml.rds")
+```
+
+```{r}
+write_csv(gecko_ml, "data/gecko_ml.csv")
 ```
 
 ## Use case
@@ -1255,7 +1262,6 @@ gecko_ml |>
   select(
     -start("new_") # "new_" variables are newly created so they don't have original conterparts to be                    #removed
   )
-  
 ```
 
 
