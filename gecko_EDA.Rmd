@@ -958,7 +958,6 @@ knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig3.png"))
 knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig4.png")) 
 ```
 
-
 ## Creating new variables 
 
 ### Create MW and hydroxyl_alkl_interaction interaction
@@ -985,13 +984,13 @@ gecko_num_scaled <-
   mutate(
     new_polarity_score = 
        scale(
-          3 * hydroxyl_alkl +
+          (3 * hydroxyl_alkl +
           4 * carboxylic_acid + 
           2 * aldehyde + 
           2 * ketone + 
           2 * ester + 
-          3 * nitro
-        )^0.4 # it is further taken to the power of 0.4, for approximating normaility
+          3 * nitro)
+        ) # it is further taken to the power of 0.4, for approximating normaility
   )
 ```
 
