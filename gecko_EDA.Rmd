@@ -104,7 +104,7 @@ They are described in chronological order:
 
 ```{r}
 #read data
-gecko_full_vars <- read_csv(file.path(here(), "data", "Dataframe.csv"))
+gecko_full_vars <- read_csv(file.path(here(), "data", "train.csv"))
 ```
 ## Select variables for modelling
 
@@ -121,9 +121,9 @@ SELECT variables for modeling into object `gecko`. Variable names are mostly the
 gecko <- 
   gecko_full_vars |> 
   dplyr::select(
-    id = index,           #A unique molecule index used in naming files
+    id = Id,              #A unique molecule index used in naming files
     MW,                   #The molecular weight of the molecule (g/mol).
-    pSat_Pa,              #The saturation vapour pressure of the molecule calculated by COSMOtherm (Pa)
+    
     NumOfAtoms,           #The number of atoms in the molecule
     NumOfC,               #The number of carbon atoms in the molecule
     NumOfO,               #The number of oxygen atoms in the molecul
@@ -134,34 +134,35 @@ gecko <-
     parentspecies,        #Either “decane”, “toluene”, “apin” for alpha-pinene or a combination of these connected by an underscore to indicate ambiguous                           #descent. In 243 cases, the parent species is “None” because it was not possible to retrieve it.
     
     cc =                  #The number of non-aromatic C=C bounds found in the molecule.
-      "C=C (non-aromatic)", 
+      "C.C..non.aromatic.", 
     
     ccco =               #The number of “C=C-C=O” structures found in non-aromatic rings in the molecule.
-      "C=C-C=O in non-aromatic ring",
+      "C.C.C.O.in.non.aromatic.ring",
     
     hydroxyl_alkl =      #The number of the alkylic hydroxyl groups found in the molecule.
-      "hydroxyl (alkyl)",
+      "hydroxyl..alkyl.",
     
     aldehyde,            #The number of aldehyde groups in the molecule.
     ketone,              #The number of ketone groups in the molecule.
     
     carboxylic_acid =    #The number of carboxylic acid groups in the molecule.
-      "carboxylic acid",
+      "carboxylic.acid",
     ester,               #The number of ester groups in the molecule.
     
     ether_alicyclic =    #The number of alicyclic ester groups in the molecule.
-      "ether (alicyclic)",
+      "ether..alicyclic.",
     nitrate,             #The number of alicyclic nitrate groups in the molecule
     nitro,               #The number of nitro ester groups in the molecule
     
     aromatic_hydroxyl =
-    "aromatic hydroxyl", #The number of alicyclic aromatic hydroxyl groups in the molecule.
+    "aromatic.hydroxyl", #The number of alicyclic aromatic hydroxyl groups in the molecule.
     
     carbonylperoxynitrate, #The number of carbonylperoxynitrate groups in the molecule.
     peroxide,            #The number of peroxide groups in the molecule
     hydroperoxide,       #The number of hydroperoxide groups in the molecule.
     carbonylperoxyacid,  #The number of carbonylperoxyacid groups found in the molecule
-    nitroester           #The number of nitroester groups found in the molecule
+    nitroester,           #The number of nitroester groups found in the molecule
+    pSat_Pa,              #The saturation vapour pressure of the molecule calculated by COSMOtherm (Pa)
   ) |> 
   dplyr::select(    # move response variable to the front
     id,
