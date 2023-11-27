@@ -1,0 +1,1273 @@
+---
+title: "Gecko Pre-processing, Final Project, Introduction to Machine Learning"
+author: "Rong Guang"
+date: "2023-11-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, warning = F)
+```
+
+## Read in data
+
+```{r}
+library(tidyverse)
+stopifnot(require('here'))
+stopifnot(require('haven'))
+stopifnot(require('labelled'))
+stopifnot(require('patchwork'))
+stopifnot(require('naniar'))
+stopifnot(require('fastDummies'))
+stopifnot(require('GGally'))
+stopifnot(require('magick'))
+```
+
+
+## A quck summary of the data pre-processing work
+
+They are described in chronological order:
+
+  - Features listed in p1-2 of the project description were selected into an object `gecko.`
+  
+  - Missing values were checked: no NA exists;
+  
+  - Feature type were checked: we have one discrete feature in the data. 
+  
+     - Level "None" in the discrete variable was replaced with NA.
+  
+     - One hot encoding was done to Discrete feature. 
+     
+     - Both original and one-hot-coding variables were kept in the data.
+     
+     - To distinguish, one-hot-encoding variables have `ohe_` in the beginning of their names. 
+     
+     - This gave us 8 more one hot encoding variables. 
+  
+  - For features recorded in number, we separated them into ordinal and continuous. 
+  
+     - Ordinal (n= 22) and continuous (n = 3) were handled differently in some following steps.
+       
+     - Occasional they have blurred borderline, we set an arbitrary rule to distinguish (n = 50 levels cutoff)
+   
+     - Continuous were transformed via different approaches (e.g logarithmic) to approximate normality.
+     
+     - Both transformed (var name pattern: `trans_`) and original continuous features were kept in the data. 
+
+     - At this point, we had 3 more variables (`trans_`).
+     
+  - The full data set (except for discrete feature) were scaled. 
+   
+     - Ordinal data were also scaled considering we have big discrepancy in the number of levels across features.
+  
+  - Outliers were checked for some feautres, but nothing was done to handle them
+   
+     - Outliers in ordinal features were not handled, because we assume they can be rare but actual category. 
+     
+     - Outliers in continuous variables were examined by applying the rule `mean +3.29 sd`. 
+     
+     - Nothing was done to handle outliers in continuous feature due to our lack of domain knowledge.
+     
+  - Correlation matrix across all variables (original and transformed) were created. 
+     
+     - Due to the number of features included, we divided them into 4 matrices.
+     
+     - Each matrices always have first two rows/columns as the response variable and its transformation.
+     
+     - To get intuitive idea of important predictors for the modeling.
+     
+     - To check co-linearity: co-linearity is severe, especially across features with "Num" in names.
+     
+  - Several new variables were created using the existing variables.
+  
+     - One is weighted sum-up of functional groups.
+     
+     - One is interaction terms of molecular weight and the number of hydroxyl groups
+     
+     - One is PCA of all features with "Num" in names: two principal components were extracted.
+     
+     - The left us with 4 more new feature. To distinguish, they were named with `new_`
+     
+     - Due to the lack of domain knowledge, the creation of them are mostly explorative. 
+     
+     - Be cautious using them. (Maybe) start by not using them. 
+     
+  - Some use case are demonstrated. e.g select the most preferred variables.  
+  
+     - For comprehensiveness the final data set included both original variables and generated variables.
+     
+     - Created variables start with `new_` in names. They are not recommended to be included for modelling.
+     
+     - Continuous variables were transformed to appraoch normaility. The transformed ones have `trans_` in names.
+     
+     - One discrete variable `parentspecies` has one hot encoding alternatives, which have `ohe_` in names.
+
+```{r}
+#read data
+
+#gecko_full_vars <- read_csv(file.path(here(), "data", "train.csv"))
+gecko_full_vars <- read_csv(file.path(here(), "data", "test.csv"))
+gecko_full_vars$pSat_Pa <- 1 #dummy
+```
+## Select variables for modelling
+
+SELECT variables for modeling into object `gecko`. Variable names are mostly the original ones, except that:
+    
+    - all `()` are turned into `_`, e.g. "hydroxyl (alkyl)" turned into hydroxyl_alkyl
+    
+    - all spaces are turned into `_`, e.g. "aromatic(hydroxyl)" turned into aromatic_hydroxyl
+    
+    - two special cases are : now "C=C-C=O in non-aromatic ring" is "ccco", and  "C=C (non-aromatic)" is "cc",. 
+
+```{r}
+# SELECT variables into object `gecko`
+gecko <- 
+  gecko_full_vars |> 
+  dplyr::select(
+    id = Id,              #A unique molecule index used in naming files
+    MW,                   #The molecular weight of the molecule (g/mol).
+    
+    NumOfAtoms,           #The number of atoms in the molecule
+    NumOfC,               #The number of carbon atoms in the molecule
+    NumOfO,               #The number of oxygen atoms in the molecul
+    NumOfN,               #The number of nitrogen atoms in the molecule
+    NumHBondDonors,       #“The number of hydrogen bond donors in the molecule, i.e. hydrogens bound to oxygen.”
+    NumOfConf,            #The number of stable conformers found and successfully calculated by COSMOconf.
+    NumOfConfUsed,        #The number of conformers used to calculate the thermodynamic properties.
+    parentspecies,        #Either “decane”, “toluene”, “apin” for alpha-pinene or a combination of these connected by an underscore to indicate ambiguous                           #descent. In 243 cases, the parent species is “None” because it was not possible to retrieve it.
+    
+    cc =                  #The number of non-aromatic C=C bounds found in the molecule.
+      "C.C..non.aromatic.", 
+    
+    ccco =               #The number of “C=C-C=O” structures found in non-aromatic rings in the molecule.
+      "C.C.C.O.in.non.aromatic.ring",
+    
+    hydroxyl_alkl =      #The number of the alkylic hydroxyl groups found in the molecule.
+      "hydroxyl..alkyl.",
+    
+    aldehyde,            #The number of aldehyde groups in the molecule.
+    ketone,              #The number of ketone groups in the molecule.
+    
+    carboxylic_acid =    #The number of carboxylic acid groups in the molecule.
+      "carboxylic.acid",
+    ester,               #The number of ester groups in the molecule.
+    
+    ether_alicyclic =    #The number of alicyclic ester groups in the molecule.
+      "ether..alicyclic.",
+    nitrate,             #The number of alicyclic nitrate groups in the molecule
+    nitro,               #The number of nitro ester groups in the molecule
+    
+    aromatic_hydroxyl =
+    "aromatic.hydroxyl", #The number of alicyclic aromatic hydroxyl groups in the molecule.
+    
+    carbonylperoxynitrate, #The number of carbonylperoxynitrate groups in the molecule.
+    peroxide,            #The number of peroxide groups in the molecule
+    hydroperoxide,       #The number of hydroperoxide groups in the molecule.
+    carbonylperoxyacid,  #The number of carbonylperoxyacid groups found in the molecule
+    nitroester,           #The number of nitroester groups found in the molecule
+    pSat_Pa,              #The saturation vapour pressure of the molecule calculated by COSMOtherm (Pa)
+  ) |> 
+  dplyr::select(    # move response variable to the front
+    id,
+    pSat_Pa,
+    everything()
+  )
+```
+
+## Assign variable labels
+
+## Handle missing values
+
+There is no missing values in our data 
+
+```{r fig.width=8, fig.height=4}
+naniar::vis_miss(gecko)
+```
+
+## Varible type
+
+```{r}
+var.type <- gecko |> map(class) |> unlist() |> data.frame()
+names(var.type) <- "var_type"
+var.type
+```
+
+## Handle discrete variables
+
+Find character variable
+
+```{r}
+var.type |> 
+  filter(
+    var_type == "character"
+  )
+```
+
+Examine it
+
+```{r}
+gecko$parentspecies |> table()
+```
+
+One hot encoding:
+
+```{r}
+# "None" is not an actual category according to description, NA was used to replace it
+gecko <- 
+  gecko |> 
+  mutate(
+   parentspecies = 
+     ifelse(
+       parentspecies == "None",
+       NA,
+       parentspecies
+   )
+  )
+
+#extract categorical variable 
+category_var <- gecko[,c("id", "parentspecies")]
+
+#one hot encoding
+gecko_cat <- category_var |> fastDummies::dummy_cols(select_columns = "parentspecies")
+#remove NA
+gecko_cat$parentspecies_NA <- NULL
+
+new.cat.name <- paste0("ohe_",names(gecko_cat[,-c(1,2)])) #ohe for one hot encoding
+names(gecko_cat) <- c("id","parentspecies", new.cat.name)
+```
+
+For convenience of visualization, other variables are filtered out: object `gecko_num` contains all variables recorded in numbers; `gecko_cat` contains variable parentspecies and its one-hot encoded columns. Both sets have `id`. They will be merged after other data treatment.
+
+```{r}
+gecko_num <- 
+  gecko |> 
+  dplyr::select(
+    -parentspecies
+  )
+```
+
+
+## Visualize variables recorded in numbers
+
+All remaining variables (after separating out categorical varialbe `parentspecies`) were recorded using numeric values. They are visualized and examined for further decisions.
+
+### Box plot
+
+```{r, fig.height= 5, fig.width= 8}
+gecko_num[,-1] |> 
+  pivot_longer(
+    everything(),
+    values_to = "values",
+    names_to = "variables"
+    ) |> 
+  ggplot(
+    aes(x = values)
+  ) +
+  geom_boxplot() +
+  facet_wrap(
+    ~variables, 
+    scales = "free"
+  )+
+  theme_bw()
+```
+
+### Histogram
+
+```{r, fig.height= 5, fig.width= 8}
+gecko_num[,-1] |> 
+  pivot_longer(
+    everything(),
+    values_to = "values",
+    names_to = "variables"
+    ) |> 
+  ggplot(
+    aes(x = values)
+  ) +
+  geom_histogram() +
+  facet_wrap(
+    ~variables, 
+    scales = "free"
+  )+
+  theme_bw()
+```
+
+## Separate ordinal and continuous variables
+
+According to the visualization and variable explanation, most of the remaining variables can be either continuous or ordinal. For the purpose of this analysis, we set an arbitrary rule that any of these variables with number of unique values $<$ 50 will be treated as ordinal variables, whereas others as continuous variables. 
+
+We first tabulate the number of unique values for each variable.
+
+```{r}
+n.of.unique <- 
+  gecko_num |> 
+  map(table) |> 
+  map(length) |> 
+  unlist() |> 
+  data.frame() |> 
+  rename("Number of unique values" = 1) 
+n.of.unique
+```
+
+These variables have the number of unique values $<$ 50. They are treated as ordinal. In many cases, preserving the ordinal nature of the data is more important than achieving normality, especially when the order represents a critical aspect of the data's meaning. Therefore, they will not undergo transformation to normality.
+
+```{r}
+ordinal.var.names <- n.of.unique |> filter(`Number of unique values` < 50) |> rownames()
+# FIXME if we need to turn ordinal data into factor, turn on the following 3 lines
+# gecko_num <- 
+#   gecko_num |> 
+#     mutate(across(all_of(ordinal.var.names), factor))
+```
+
+These variables have the number of unique values $\ge$ 50 They are treated as continuous. 
+
+```{r}
+continuous.var.names <- 
+  n.of.unique |> 
+  filter(`Number of unique values` >= 50) |> 
+  rownames() |> 
+  stringr::str_remove_all("id")
+```
+
+##Transform continuous variable into normality
+
+Logarithmic or exponential transformation will be considered for their approximating normal distribution. `Note` Both transformed and inital variables will be kept in the data sheet for further analysis. 
+
+### Check intial distributiopn
+
+These variables are treated as continuous. They look skewed, to different extent.
+
+```{r}
+gecko_num |> 
+  select(one_of(continuous.var.names)) |> 
+  pivot_longer(everything(), names_to = "variable", values_to = "value") |> 
+  ggplot(
+    aes(x = value)
+  )+
+  geom_histogram() +
+  facet_wrap(~variable, scales = "free")+
+  theme_bw()
+```
+
+### Log/exp transformation of `NumOfConf`
+
+The distribution of `NumOfConf` is skewed. Take NumOfConf to the power of 0.3. 
+
+```{r}
+gecko_num <- 
+  gecko_num |> 
+  mutate(trans_NumOfConf = NumOfConf^0.3)
+
+var_label(gecko_num$trans_NumOfConf) <- "NumOfConf^0.3 transformation"
+```
+
+Compare before and after transformation
+
+```{r}
+NumOfConf.distr.a <- 
+  gecko_num |> 
+  ggplot(aes(x = NumOfConf)) +
+  geom_histogram()+
+  labs(title = "Histogram before transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+
+NumOfConf.distr.b <- 
+  gecko_num |> 
+  ggplot(aes(sample = NumOfConf)) +
+  geom_qq()+
+  labs(title = "QQ plot after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+```
+
+
+```{r}
+NumOfConf.distr.c <- 
+  gecko_num |> 
+  ggplot(aes(x = NumOfConf^0.3)) +
+  geom_histogram()+
+  labs(title = "Histogram after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+
+NumOfConf.distr.d <- 
+  gecko_num |> 
+  ggplot(aes(sample = NumOfConf^0.3)) +
+  geom_qq()+
+  labs(title = "QQ plot after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+```
+
+Check distribution of the new variable. It approximates normality:
+
+```{r }
+(NumOfConf.distr.a|NumOfConf.distr.b)/
+  (NumOfConf.distr.c|NumOfConf.distr.d)+plot_annotation(
+  title = 'Variable NumOfConf before and after transfromation')
+```
+
+### Log/exp transformation of `MW`
+
+The distribution of `MW` has a pit in the peak. Take NumOfConf to the power of 0.5 can improve it a bit. 
+
+```{r}
+gecko_num <- 
+  gecko_num |> 
+  mutate(trans_MW = MW^0.5)
+
+var_label(gecko_num$trans_MW) <- "MW^0.5 transformation"
+```
+
+Compare before and after transformation
+
+```{r}
+MW.distr.a <- 
+  gecko_num |> 
+  ggplot(aes(x = MW)) +
+  geom_histogram()+
+  labs(title = "Histogram before transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+
+MW.distr.b <- 
+  gecko_num |> 
+  ggplot(aes(sample = MW)) +
+  geom_qq()+
+  labs(title = "QQ plot after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+```
+
+
+```{r}
+MW.distr.c <- 
+  gecko_num |> 
+  ggplot(aes(x = MW^0.5)) +
+  geom_histogram()+
+  labs(title = "Histogram after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+
+MW.distr.d <- 
+  gecko_num |> 
+  ggplot(aes(sample = MW^0.5)) +
+  geom_qq()+
+  labs(title = "QQ plot after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+```
+
+Check distribution of the new variable. The pit in peak has been roughly resolved. However, QQ plot does not show visible improvement towards normality (the original variable looked already good in a QQ plot).  Considering both original and transformed variable will be kept in the data, I will leave the decision on which to use to the stage of modeling. 
+
+```{r }
+(MW.distr.a|MW.distr.b)/
+  (MW.distr.c|MW.distr.d)+plot_annotation(
+  title = 'Variable MW before and after transfromation')
+```
+
+### Log/exp transformation of `pSat_Pa`
+
+The distribution of `pSat_Pa` is skewed. Take NumOfConf to the power of 0.3. 
+
+```{r}
+gecko_num <- 
+  gecko_num |> 
+  mutate(trans_pSat_Pa = pSat_Pa |> log())
+
+var_label(gecko_num$trans_pSat_Pa) <- "log(pSat_Pa) transformation"
+```
+
+Compare before and after transformation
+
+```{r}
+pSat_Pa.distr.a <- 
+  gecko_num |> 
+  ggplot(aes(x = pSat_Pa)) +
+  geom_histogram()+
+  labs(title = "Histogram before transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+
+pSat_Pa.distr.b <- 
+  gecko_num |> 
+  ggplot(aes(sample = pSat_Pa)) +
+  geom_qq()+
+  labs(title = "QQ plot after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+```
+
+
+```{r}
+pSat_Pa.distr.c <- 
+  gecko_num |> 
+  ggplot(aes(x = pSat_Pa^0.5 |> log())) +
+  geom_histogram()+
+  labs(title = "Histogram after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+
+pSat_Pa.distr.d <- 
+  gecko_num |> 
+  ggplot(aes(sample = pSat_Pa |> log())) +
+  geom_qq()+
+  labs(title = "QQ plot after transformation")+
+  theme(plot.title = element_text(size = 2))+
+  theme_bw()
+```
+
+Check distribution of the new variable. It approximates normality:
+
+```{r }
+(pSat_Pa.distr.a|pSat_Pa.distr.b)/
+  (pSat_Pa.distr.c|pSat_Pa.distr.d)+plot_annotation(
+  title = 'Variable pSat_Pa before and after transfromation')
+```
+
+## Scaling
+
+```{r}
+# scale all columns except id
+gecko_num_scaled <- scale(gecko_num[,-1]) |> data.frame()
+# add id column
+gecko_num_scaled <- 
+  gecko_num_scaled |> 
+  mutate(id = gecko_num$id) |> 
+  select(id, everything())
+```
+
+Check the distribution of continous variables after scaling
+
+```{r}
+gecko_num_scaled |> 
+  dplyr::select(
+    starts_with("trans_")
+  ) |> 
+  pivot_longer(
+    everything(),
+    values_to = "values",
+    names_to = "variables"
+    ) |> 
+  ggplot(
+    aes(x = values)
+  ) +
+  geom_histogram() +
+  facet_wrap(
+    ~variables, 
+    scales = "free"
+  )+
+  theme_bw()
+```
+
+## Handle out-liers
+
+Since we are not chemists and did not take any role in collecting the data, there is nothing we can base on to decide a value is out-liers or not, unless they are extremely weird. 
+
+This is especially true for outliers in categorical variables, since they are more possibly not out-liers, but actually belong to this rare category (level).
+
+As such, we will only examine outlines in transformed continuous variables, without further treatment.
+
+In the present analysis, `we regard as outliers any value further away from mean at 3.29 standard deviations`.
+
+Below is the number of outliers for the continuous variable
+
+```{r}
+gecko_num_scaled |> 
+  select(starts_with("trans_pSat_Pa")) |> 
+  filter(abs(trans_pSat_Pa) > 3.29) |> nrow()
+
+gecko_num_scaled |> 
+  select(starts_with("trans_MW")) |> 
+  filter(abs(trans_MW) > 3.29)|> nrow()
+
+gecko_num_scaled |> 
+  select(starts_with("trans_NumOfConf")) |> 
+  filter(abs(trans_NumOfConf) > 3.29)|> nrow()
+```
+
+
+## Correlation matrix
+
+Correlation matrix for all continuous  (before and after transformation)  and ordinal variablesare created as references for machine learning. Due to the number of variables, we separate it into four matrices. For each matrix, the first two rows/columns are always the response variable `pSat_Pa` and its log transformed variable `trans_pSat_Pa`
+
+```{r}
+#define functions that allow for fine-tuning GGally matrix aesthetics.
+my.fun.density <- function(data, mapping, ...) { #notes are roughly same with above
+  
+  ggplot(data = data, mapping = mapping) +
+    geom_histogram(aes(y=..density..),
+                   color = "black", 
+                   fill = "white")+
+    geom_density(fill = "#FF6666", alpha = 0.25) +
+    theme(panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          panel.background = element_rect(fill = "lightblue",
+                                          color = "black"))
+} 
+
+#define a function that allows me to fine-tune the matrix
+my.fun.smooth <- function(data,    #my function needs 3 arguments
+                          mapping,
+                          method = "loess"){
+  
+  ####
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  
+  coef <- cor(x, y, method= "spearman", use='complete.obs')
+  
+  corr <- cor.test(x, y)
+  
+  corr.p <- corr$p.value
+  
+  match <- c(rep("yellow", 5), rep("wheat", 95))
+  fill <- match[findInterval(corr.p, seq(0, 1, length = 100))]
+  
+  match2 <- c(rep("black", 30), rep("firebrick", 70))
+  color <- match2[findInterval(abs(coef), seq(0, 1, length = 100))]
+  
+  match.size <- c(rep(1.5, 30), rep(2.5, 70))
+  size <- match.size[findInterval(abs(coef), seq(0, 1, length = 100))]
+  
+  ###
+  ggplot(data = data, #data is passed from ggpairs' arguments
+         mapping = mapping)+#aes is passed from ggpairs' arguments
+    geom_point(size = 0.3,  #draw points
+               color = "blue")+
+    geom_smooth(method = method,  #fit a linear regression
+                size = 0.3, 
+                color = "red")+
+    theme(panel.grid.major = element_blank(), #get rid of the grids
+          panel.grid.minor = element_blank(),
+          panel.background = element_rect(fill = fill, #adjust background #F0E442
+                                          color = color,
+                                          size = size
+                                          ))
+} 
+```
+
+```{r}
+# define a function allowing for adjusting text, frame color and panel background of ggpairs
+cor_func <- function(data, mapping, method, symbol, ...){
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  
+  coef <- cor(x, y, method=method, use='complete.obs')
+  
+  corr <- cor.test(x, y)
+  
+  corr.p <- corr$p.value
+  
+  colFn <- colorRampPalette(c("yellow", "white", "dodgerblue"), 
+                            interpolate ='spline')
+  
+  #colFn2 <- colorRampPalette(c("firebrick", "firebrick", "firebrick"), 
+  #                          interpolate ='spline')
+  
+  rampcols <- colFn(100)
+  #rampcols2 <- colFn2(100)
+  
+  match <- c(rampcols[1:5], rep("#FFFFFF", 95))
+  fill <- match[findInterval(corr.p, seq(0, 1, length = 100))]
+  
+  match2 <- c(rep("black", 30), rep("firebrick", 70))
+  fill2 <- match2[findInterval(abs(coef), seq(0, 1, length = 100))]
+  
+  match.size <- c(rep(1.5, 30), rep(2.5, 70))
+  size <- match.size[findInterval(abs(coef), seq(0, 1, length = 100))]
+  
+  ggally_text(
+    label = paste(symbol, as.character(round(coef, 3))), 
+    mapping = aes(),
+    xP = 0.5, yP = 0.5,
+    color = 'black',
+    ...) + 
+    theme_void() +
+    theme(panel.background = element_rect(fill = fill, color = fill2, size = size))
+}
+```
+
+```{r fig.height= 6, fig.width= 10, warning=F, eval = F}
+# 1st figure of the series
+#vars 1:7
+gecko_num_scaled |> 
+  dplyr::select(
+    id,
+    trans_pSat_Pa,
+    pSat_Pa,
+    MW,
+    trans_MW,
+    NumOfConf,
+    trans_NumOfConf,
+    everything()
+    ) |> 
+  dplyr::select(
+    trans_pSat_Pa,
+    pSat_Pa,
+    3:9
+    ) |> 
+  ggpairs(lower = 
+            list(continuous = my.fun.smooth), #lower half show points with fitted line
+          diag =
+            list(continuous = my.fun.density), #diagonal grids show density plots
+          upper =
+            list(continuous = wrap(cor_func,method = 'spearman', symbol = "Corr:\n")),
+          labeller = label_wrap_gen(14)
+          ) +
+   theme (
+    plot.title = 
+      element_text(
+        size = 12,  #adjust title visuals
+        face = "bold"
+        ),
+    plot.caption = 
+      element_text(
+        color = "red", 
+        face = "italic", 
+        size = 9),
+    strip.background = 
+      element_rect(
+        color = "black", 
+        fill = "lightblue", 
+        size = 2
+        ),
+    strip.text.y = 
+      element_text(
+        angle = 0, 
+        size = 9, 
+        face = "bold", 
+        color = "black"),
+    strip.text.x = 
+      element_text(
+        angle = 0, 
+        size = 8, 
+        face = "bold", 
+        color = "black"
+        )
+    ) +
+  labs(
+  caption = "Regressed by lowess;
+                  Red frame indicates |r|>0.3; Yellow background indicates significant p",
+  title = "Figure. Correlation matrix for response variable and its logarithmic transformation (first 2 cols/rows) and predictors (1~7)")
+```
+
+```{r fig.height= 6, fig.width= 10, warning=F, eval = F}
+# 2nd figure of the series
+#vars 8:14
+gecko_num_scaled |> 
+  dplyr::select(
+    id,
+    trans_pSat_Pa,
+    pSat_Pa,
+    MW,
+    trans_MW,
+    NumOfConf,
+    trans_NumOfConf,
+    everything()
+    ) |> 
+  dplyr::select(
+    trans_pSat_Pa,
+    pSat_Pa,
+    10:16
+    ) |> 
+  ggpairs(lower = 
+            list(continuous = my.fun.smooth), #lower half show points with fitted line
+          diag =
+            list(continuous = my.fun.density), #diagonal grids show density plots
+          upper =
+            list(continuous = wrap(cor_func,method = 'spearman', symbol = "Corr:\n")),
+          labeller = label_wrap_gen(14)
+          ) +
+   theme (
+    plot.title = 
+      element_text(
+        size = 10,  #adjust title visuals
+        face = "bold"
+        ),
+    plot.caption = 
+      element_text(
+        color = "red", 
+        face = "italic", 
+        size = 10),
+    strip.background = 
+      element_rect(
+        color = "black", 
+        fill = "lightblue", 
+        size = 2
+        ),
+    strip.text.y = 
+      element_text(
+        angle = 0, 
+        size = 9, 
+        face = "bold", 
+        color = "black"),
+    strip.text.x = 
+      element_text(
+        angle = 0, 
+        size = 8, 
+        face = "bold", 
+        color = "black"
+        )
+    ) +
+  labs(
+  caption = "Regressed by lowess;
+                  Red frame indicates |r|>0.3; Yellow background indicates significant p",
+  title = "Figure. Correlation matrix for response variable and its logarithmic transformation (first 2 cols/rows) and predictors (8-14)")
+```
+
+```{r fig.height= 6, fig.width= 10, warning=F, eval = F}
+## 3rd figure of the series
+#vars 15:20
+gecko_num_scaled |> 
+  dplyr::select(
+    id,
+    trans_pSat_Pa,
+    pSat_Pa,
+    MW,
+    trans_MW,
+    NumOfConf,
+    trans_NumOfConf,
+    everything()
+    ) |> 
+  dplyr::select(
+    trans_pSat_Pa,
+    pSat_Pa,
+    17:22
+    ) |> 
+  ggpairs(lower = 
+            list(continuous = my.fun.smooth), #lower half show points with fitted line
+          diag =
+            list(continuous = my.fun.density), #diagonal grids show density plots
+          upper =
+            list(continuous = wrap(cor_func,method = 'spearman', symbol = "Corr:\n")),
+          labeller = label_wrap_gen(14)
+          ) +
+   theme (
+    plot.title = 
+      element_text(
+        size = 10,  #adjust title visuals
+        face = "bold"
+        ),
+    plot.caption = 
+      element_text(
+        color = "red", 
+        face = "italic", 
+        size = 10),
+    strip.background = 
+      element_rect(
+        color = "black", 
+        fill = "lightblue", 
+        size = 2
+        ),
+    strip.text.y = 
+      element_text(
+        angle = 0, 
+        size = 8, 
+        face = "bold", 
+        color = "black"),
+    strip.text.x = 
+      element_text(
+        angle = 0, 
+        size = 7, 
+        face = "bold", 
+        color = "black"
+        )
+    ) +
+  labs(
+  caption = "Regressed by lowess;
+                  Red frame indicates |r|>0.3; Yellow background indicates significant p",
+  title = "Figure. Correlation matrix for response variable and its logarithmic transformation (first 2 cols/rows) and predictors (15-20)")
+```
+
+
+```{r fig.height= 6, fig.width= 10, warning=F, eval = F}
+# 4th figure of the series
+#vars 21:27
+gecko_num_scaled |> 
+  dplyr::select(
+    id,
+    trans_pSat_Pa,
+    pSat_Pa,
+    MW,
+    trans_MW,
+    NumOfConf,
+    trans_NumOfConf,
+    everything()
+    ) |> 
+  dplyr::select(
+    trans_pSat_Pa,
+    pSat_Pa,
+    23:29
+    ) |> 
+  ggpairs(lower = 
+            list(continuous = my.fun.smooth), #lower half show points with fitted line
+          diag =
+            list(continuous = my.fun.density), #diagonal grids show density plots
+          upper =
+            list(continuous = wrap(cor_func,method = 'spearman', symbol = "Corr:\n")),
+          labeller = label_wrap_gen(14)
+          ) +
+   theme (
+    plot.title = 
+      element_text(
+        size = 10,  #adjust title visuals
+        face = "bold"
+        ),
+    plot.caption = 
+      element_text(
+        color = "red", 
+        face = "italic", 
+        size = 10),
+    strip.background = 
+      element_rect(
+        color = "black", 
+        fill = "lightblue", 
+        size = 2
+        ),
+    strip.text.y = 
+      element_text(
+        angle = 0, 
+        size = 8, 
+        face = "bold", 
+        color = "black"),
+    strip.text.x = 
+      element_text(
+        angle = 0, 
+        size = 7, 
+        face = "bold", 
+        color = "black"
+        )
+    ) +
+  labs(
+  caption = "Regressed by lowess;
+                  Red frame indicates |r|>0.3; Yellow background indicates significant p",
+  title = "Figure. Correlation matrix for response variable and its logarithmic transformation (first 2 cols/rows) and predictors (21-27)")
+```
+
+The above 4 chunks for correlation matrix are time-costly to run. For saving time, they are set to `eval = F` and the output pics are read and displayed as below. In case of changes in the data, remove `eval = F` in chunk setting and run for the updated results. 
+
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig1.png")) 
+```
+
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig2.png")) 
+```
+
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig3.png")) 
+```
+
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig4.png")) 
+```
+
+## Creating new variables 
+
+### Create MW and hydroxyl_alkl_interaction interaction
+
+Interaction between molecular weight and the number of hydroxyl groups might jointly affect the vapor pressure. An variable is created for capturing this interaction
+
+```{r}
+gecko_num_scaled <- 
+  gecko_num_scaled |> 
+  mutate(
+    new_MW_hydroxyl_alkl_interaction = scale(MW * hydroxyl_alkl) |> as.numeric()
+  )
+
+var_label(gecko_num_scaled$new_MW_hydroxyl_alkl_interaction) <- "Interaction between molecular weight and the number of hydroxyl groups "
+```
+
+### Create Polarity
+
+Polarity is a key factor in vapor pressure. I estimate the size of polarity by assigning different weights to relevant functional group.
+
+```{r}
+gecko_num_scaled <- 
+  gecko_num_scaled |> 
+  mutate(
+    new_polarity_score = 
+       scale(
+          (3 * hydroxyl_alkl +
+          4 * carboxylic_acid + 
+          2 * aldehyde + 
+          2 * ketone + 
+          2 * ester + 
+          3 * nitro)
+        ) |> # it is further taken to the power of 0.4, for approximating normaility
+      as.numeric()
+  )
+```
+
+### Dimensionality reduction
+
+All variables with "Num" in names showed high co-linearity in the correlation matrix. Here we try to condense them into a reduced number of variables. 
+
+```{r}
+
+# all vars with "Num" in name
+num.vars <- gecko_num_scaled |> 
+  dplyr::select(
+    contains("Num")&!contains("trans")
+  ) 
+
+# do PCA
+pca_result <- prcomp(num.vars)
+
+#turn first two principal components into values (they explained 61.24% variability)
+pca.vars <- pca_result$x[,1:2] |> data.frame()
+
+#save the two components into the data
+gecko_num_scaled <-  
+  gecko_num_scaled |> 
+  mutate(
+    new_num_pca_1 = pca.vars$PC1,
+    new_num_pca_2 = pca.vars$PC2
+  )
+```
+
+Check their correlation with response variable:
+
+```{r}
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr")
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, 
+         #cex = cex.cor * r
+         )
+}
+
+# gecko_num_scaled |> 
+#   dplyr::select(
+#     trans_pSat_Pa,
+#     starts_with("new_")
+#   ) |> 
+#   pairs(
+#     lower.panel = panel.smooth,
+#     upper.panel = panel.cor,
+#     diag.panel = panel.hist,
+#     main = "Correlation matrix of the newly-created variable and response variable"
+#     )
+```
+
+Bring back discrete data. 
+
+```{r}
+gecko_ml <- 
+  gecko_num_scaled |> 
+  inner_join(
+    gecko_cat,
+    by = "id"
+  )
+```
+
+## Introduce full features in data
+
+```{r codebook}
+gecko_ml <- 
+gecko_ml |> 
+  dplyr::select(
+    id,          #A unique molecule index used in naming files
+    
+    pSat_Pa,              #The saturation vapour pressure of the molecule calculated by COSMOtherm (Pa)
+    MW,                   #The molecular weight of the molecule (g/mol).
+    NumOfAtoms,           #The number of atoms in the molecule
+    NumOfC,               #The number of carbon atoms in the molecule
+    NumOfO,               #The number of oxygen atoms in the molecul
+    NumOfN,               #The number of nitrogen atoms in the molecule
+    NumHBondDonors,       #“The number of hydrogen bond donors in the molecule, i.e. hydrogens bound to oxygen.”
+    NumOfConf,            #The number of stable conformers found and successfully calculated by COSMOconf.
+    NumOfConfUsed,        #The number of conformers used to calculate the thermodynamic properties.
+    
+    cc,                   #The number of non-aromatic C=C bounds found in the molecule.
+
+    ccco,                #The number of “C=C-C=O” structures found in non-aromatic rings in the molecule.
+
+    
+    hydroxyl_alkl,        #The number of the alkylic hydroxyl groups found in the molecule.
+
+    
+    aldehyde,            #The number of aldehyde groups in the molecule.
+    ketone,              #The number of ketone groups in the molecule.
+    
+    carboxylic_acid,      #The number of carboxylic acid groups in the molecule.
+
+    ester,               #The number of ester groups in the molecule.
+    
+    ether_alicyclic,      #The number of alicyclic ester groups in the molecule.
+
+    nitrate,             #The number of alicyclic nitrate groups in the molecule
+    nitro,               #The number of nitro ester groups in the molecule
+    
+    aromatic_hydroxyl,   #The number of alicyclic aromatic hydroxyl groups in the molecule.
+    
+    carbonylperoxynitrate, #The number of carbonylperoxynitrate groups in the molecule.
+    peroxide,            #The number of peroxide groups in the molecule
+    hydroperoxide,       #The number of hydroperoxide groups in the molecule.
+    carbonylperoxyacid,  #The number of carbonylperoxyacid groups found in the molecule
+    nitroester,          #The number of nitroester groups found in the molecule
+    parentspecies,       #Either “decane”, “toluene”, “apin” for alpha-pinene or a combination of                                          #these connected by an underscore to indicate ambiguous descent.          
+                         #In 243 cases, the parent species is “None” because it was not possible to                                        # retrieve it.
+       
+    #####above are original variables (but scaled)
+    
+    #####below are transformed or created variables (also scaled)
+                    
+    trans_NumOfConf,    # NumOfConf to the power of 0.3           
+    trans_MW,           # Square root of trans_MW              
+    trans_pSat_Pa,      # log transformed pSat_Pa                  
+    new_MW_hydroxyl_alkl_interaction, #interaction term between MW and hydroxyl_alkl
+    new_polarity_score,  #polarity with assigning different weights to functional group features               
+    new_num_pca_1,      #First principal component for all variable with "Num" in names               
+    new_num_pca_2,      #Second principal component for all variable with "Num" in names                  
+    
+    # below are the one hot encoding for parentspecies
+    ohe_parentspecies_apin,               # parentspecies category apin
+    ohe_parentspecies_apin_decane,        # parentspecies category decane
+    ohe_parentspecies_apin_decane_toluene,# parentspecies category apin_decane_toluene
+    ohe_parentspecies_apin_toluene,       # parentspecies category apin_toluene
+    ohe_parentspecies_decane,             # parentspecies category decane
+    #ohe_parentspecies_decane_toluene,     # parentspecies category decane_toluene
+  ) 
+```
+
+## label features
+
+```{r eval = F}
+var_label(gecko_ml) <- 
+  c(
+    "A unique molecule index used in naming files",
+    "The saturation vapour pressure of the molecule calculated by COSMOtherm (Pa)",
+    "The molecular weight of the molecule (g/mol)",
+    "The number of atoms in the molecule",
+    "The number of carbon atoms in the molecule",
+    "The number of oxygen atoms in the molecul",
+    
+    "The number of nitrogen atoms in the molecule",
+    "The number of hydrogen bond donors in the molecule, i.e. hydrogens bound to oxygen.",
+    "The number of stable conformers found and successfully calculated by COSMOconf.",
+    "The number of conformers used to calculate the thermodynamic properties.",
+    "The number of non-aromatic C=C bounds found in the molecule.",
+    "The number of “C=C-C=O” structures found in non-aromatic rings in the molecule.",
+    "The number of the alkylic hydroxyl groups found in the molecule",
+    "The number of aldehyde groups in the molecule.",
+    "The number of ketone groups in the molecule.",
+    "The number of carboxylic acid groups in the molecule.",
+    "The number of ester groups in the molecule.",
+    "The number of alicyclic ester groups in the molecule.",
+    "The number of alicyclic nitrate groups in the molecule",
+    "The number of nitro ester groups in the molecule",
+    "The number of alicyclic aromatic hydroxyl groups in the molecule.",
+    "The number of carbonylperoxynitrate groups in the molecule.",
+    "The number of peroxide groups in the molecule",
+    "The number of hydroperoxide groups in the molecule.",
+    "The number of carbonylperoxyacid groups found in the molecule",
+    "The number of nitroester groups found in the molecule",
+    
+    "NumOfConf to the power of 0.3 ",
+    "Square root of trans_MW ",
+    "log transformed pSat_Pa",
+    "interaction term between MW and hydroxyl_alkl",
+    "polarity with assigning different weights to functional group features",
+    "First principal component for all variable with Num in names",
+    "Second principal component for all variable with Num in names",
+    "Either “decane”, “toluene”, “apin” for alpha-pinene or a combination of these connected by an underscore to indicate ambiguousdescent. In 243 cases, the parent species is “None” because it was not possible to retrieve it.",
+    "parentspecies category apin",
+    "parentspecies category decane",
+    "parentspecies category apin_decane_toluene",
+    "parentspecies category apin_toluene",
+    "parentspecies category decane",
+    #"parentspecies category decane_toluene"  
+  ) 
+
+```
+
+```{r}
+# use example
+var_label(gecko_ml$carboxylic_acid)
+```
+
+```{r}
+gecko_ml <- gecko_ml |> data.frame()
+write_rds(gecko_ml, "data/gecko_ml.rds")
+```
+
+```{r}
+#write_csv(gecko_ml, "data/gecko_ml.csv")
+write_csv(gecko_ml, "data/gecko_ml_test.csv")
+```
+
+## Use case
+
+To select all original variables (scaled)
+
+```{r eval = F}
+gecko_ml |> 
+  dplyr::select(
+    -starts_with(
+      "new_" # remove all newly created variables (n = 4)
+      ),
+    -starts_with(
+      "trans_" #remove all transformed variables (e.g log) (n = 3)
+      ),
+   -starts_with(
+      "ohe_" #remove all one hot encodings (n = 6)
+      )
+  )
+```
+
+To select all original variables (scaled) but use the transformed continuous variables (preferred). `Note` that meanwhile we need to remove the corresponding original variables.
+
+```{r eval = F}
+gecko_ml |> 
+  dplyr::select(
+    -NumOfConf, #These 3 variables are continuous and have transformed version
+    -MW,
+    -pSat_Pa # This is the response variable 
+  )
+```
+
+To select all original variables (scaled) but use the transformed continuous variables (preferred). `And` also use one hot encoding variables to replace the original multiple level variable `parentspecies`. 
+
+```{r eval = F}
+gecko_ml |> 
+  dplyr::select(
+    -NumOfConf,
+    -trans_MW,
+    -trans_pSat_Pa,
+    -parentspecies # this is a discrete variable and it has one hot encoding alternative
+  ) 
+```
+
+To select all original variables (scaled) but use the transformed continuous variables (preferred). `And` also use one hot encoding variables to replace the original multiple level variable `parentspecies`. Further, remove the newly created variables. `I belive this is the most preferred set for our machine learning task`
+
+```{r eval = F}
+gecko_ml |> 
+  dplyr::select(
+    -NumOfConf,
+    -trans_MW,
+    -trans_pSat_Pa,
+    -parentspecies
+  ) |> 
+  select(
+    -start("new_") # "new_" variables are newly created so they don't have original conterparts to be                    #removed
+  )
+```
+
+
+
