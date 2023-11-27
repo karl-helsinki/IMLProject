@@ -1233,7 +1233,7 @@ gecko_ml |>
   dplyr::select(
     -NumOfConf, #These 3 variables are continuous and have transformed version
     -MW,
-    -pSat_Pa # This is the response varialbe 
+    -pSat_Pa # This is the response variable 
   )
 ```
 
