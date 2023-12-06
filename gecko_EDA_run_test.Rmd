@@ -104,8 +104,8 @@ They are described in chronological order:
 
 ```{r}
 #read data
-
-#gecko_full_vars <- read_csv(file.path(here(), "data", "train.csv"))
+gecko_train_mean_sd <- read_csv(file.path(here(), "data", "gecko_train_mean_sd.csv"))
+gecko_train_mean_sd <- gecko_train_mean_sd[,-1]
 gecko_full_vars <- read_csv(file.path(here(), "data", "test.csv"))
 gecko_full_vars$pSat_Pa <- 1 #dummy
 ```
@@ -527,9 +527,18 @@ Check distribution of the new variable. It approximates normality:
 
 ## Scaling
 
+Scaling test for full data
+
 ```{r}
-# scale all columns except id
-gecko_num_scaled <- scale(gecko_num[,-1]) |> data.frame()
+#train mean
+gecko.train.mean <- gecko_train_mean_sd[,-1] |> lapply(function(x)mean(x, na.rm = TRUE))
+#train sd
+gecko.train.sd <- gecko_train_mean_sd[,-1] |> lapply(function(x)sd(x, na.rm = TRUE))
+# scale all columns except id using train mean and sd
+gecko_num_scaled <- (gecko_num[,-1] - gecko.train.mean)/gecko.train.sd
+```
+
+```{r}
 # add id column
 gecko_num_scaled <- 
   gecko_num_scaled |> 
@@ -585,7 +594,6 @@ gecko_num_scaled |>
   select(starts_with("trans_NumOfConf")) |> 
   filter(abs(trans_NumOfConf) > 3.29)|> nrow()
 ```
-
 
 ## Correlation matrix
 
@@ -1203,13 +1211,17 @@ var_label(gecko_ml$carboxylic_acid)
 ```
 
 ```{r}
-gecko_ml <- gecko_ml |> data.frame()
-write_rds(gecko_ml, "data/gecko_ml.rds")
+# gecko_ml <- gecko_ml |> data.frame()
+# write_rds(gecko_ml, "data/gecko_ml.rds")
 ```
 
 ```{r}
 #write_csv(gecko_ml, "data/gecko_ml.csv")
-write_csv(gecko_ml, "data/gecko_ml_test.csv")
+gecko_ml_test <- 
+  gecko_ml |> 
+  select(-contains("pSat_Pa"))
+
+write_csv(gecko_ml_test, "data/gecko_ml_test.csv")
 ```
 
 ## Use case
@@ -1268,6 +1280,4 @@ gecko_ml |>
     -start("new_") # "new_" variables are newly created so they don't have original conterparts to be                    #removed
   )
 ```
-
-
 

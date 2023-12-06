@@ -525,6 +525,11 @@ Check distribution of the new variable. It approximates normality:
 ## Scaling
 
 ```{r}
+# save this data to get train mean and sd for scaling testing set
+write.csv(gecko_num, "data/gecko_train_mean_sd.csv")
+```
+
+```{r}
 # scale all columns except id
 gecko_num_scaled <- scale(gecko_num[,-1]) |> data.frame()
 # add id column
@@ -581,6 +586,14 @@ gecko_num_scaled |>
 gecko_num_scaled |> 
   select(starts_with("trans_NumOfConf")) |> 
   filter(abs(trans_NumOfConf) > 3.29)|> nrow()
+```
+
+Here we add an variable flagging outliers
+
+```{r}
+gecko_num_scaled |> 
+  select(starts_with("trans_pSat_Pa")) |> 
+  filter(abs(trans_pSat_Pa) > 3.29)
 ```
 
 
@@ -1264,6 +1277,62 @@ gecko_ml |>
     -start("new_") # "new_" variables are newly created so they don't have original conterparts to be                    #removed
   )
 ```
+
+## interative wrangling
+
+During the modelling stages after the initial wrangling, we identified some additional wrangling needs. They are supplemented at this section. 
+
+### Create un-scaled log base 10 version of response variable 
+
+```{r}
+#create log
+gecko_ml <- 
+  gecko_ml |> 
+  mutate(trans_log10_noscale_pSat_Pa = gecko_num$pSat_Pa |> log(base = 10))
+```
+
+save the data
+
+```{r}
+write_csv(gecko_ml, "data/gecko_ml.csv")
+```
+
+
+### Create a dataset without outliers
+
+Here we add an variable flagging outliers
+
+```{r}
+gecko_ml_outlier_flag <- 
+  gecko_ml |> 
+  mutate(
+    flag_outlier = 
+      if_else(
+        abs(scale(trans_log10_noscale_pSat_Pa)) > 3.29 |
+          abs(trans_MW) >3.29 |
+          abs(trans_NumOfConf) > 3.29,
+        1,
+        0
+      )
+    
+  )
+```
+
+Remove all cases with at least one out-lier
+
+```{r}
+gecko_ml_no_outlier <- 
+  gecko_ml_outlier_flag |> 
+  filter(flag_outlier == 0)
+```
+
+```{r}
+write_csv(gecko_ml_no_outlier, "data/gecko_ml_no_outlier.csv")
+```
+
+
+
+
 
 
 
