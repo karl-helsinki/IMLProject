@@ -1,0 +1,472 @@
+---
+title: "`r format(params$term)` Project Report\n \\vspace{0.1in} "
+author: "Dominik Kuczkowski \n Guang Rong \n Karl Zhu \\vspace{1in} "
+date: "December 23, 2023"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    fig_caption: yes
+subtitle: ''
+params:
+  term: Fall 2023 Introduction to Machine Learning
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+    echo = FALSE,
+    message = FALSE,
+    warning = FALSE
+)
+library(tidyverse)
+library(reticulate)
+library(here)
+stopifnot(require('here'))
+stopifnot(require('haven'))
+stopifnot(require('labelled'))
+stopifnot(require('patchwork'))
+stopifnot(require('naniar'))
+stopifnot(require('fastDummies'))
+stopifnot(require('GGally'))
+stopifnot(require('magick'))
+
+```
+
+\newpage
+
+```{python echo= FALSE, message = FALSE, warning=FALSE}
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LinearRegression, ElasticNet, ElasticNetCV
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.svm import SVR
+from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
+from sklearn.metrics import r2_score, mean_squared_error
+```
+
+
+# Introduction
+
+Team Members
+
+- Dominik Kuczkowski
+- Guang Rong
+- Karl Zhu
+
+**Kaggle Team Name**: Team 16 
+
+The motivation behind this project is rooted in the desire to accurately predict vapor pressure through the development of a robust predictive model that leverages the GeckoQ dataset - encompassing molecular characteristics, functional groups, and structural attributes. 
+
+```{r echo= FALSE, message = FALSE, warning=FALSE}
+#read data
+gecko_full_vars <- read_csv(file.path(here(), "data", "train.csv"))
+```
+
+# Data Processing/Analysis
+
+Our initial phase involved a comprehensive analysis aimed at discovering the inherent patterns and relationships within the dataset. Through visualizations such as histograms and correlation matrices, we sought to gain a deep understanding of how different variables interacted and to discern complex interdependencies and potential clusters within the data. Moreover, this allowed us to ensure the dataset's quality and reliability and lay the foundation for a clean and reliable dataset to set the stage for more advanced meta-analyses.
+
+```{r include= FALSE, message = FALSE, warning=FALSE}
+# SELECT variables into object `gecko`
+gecko <- 
+  gecko_full_vars |> 
+  dplyr::select(
+    id = Id,              #A unique molecule index used in naming files
+    MW,                   #The molecular weight of the molecule (g/mol).
+    
+    NumOfAtoms,           #The number of atoms in the molecule
+    NumOfC,               #The number of carbon atoms in the molecule
+    NumOfO,               #The number of oxygen atoms in the molecul
+    NumOfN,               #The number of nitrogen atoms in the molecule
+    NumHBondDonors,       #“The number of hydrogen bond donors in the molecule, i.e. hydrogens bound to oxygen.”
+    NumOfConf,            #The number of stable conformers found and successfully calculated by COSMOconf.
+    NumOfConfUsed,        #The number of conformers used to calculate the thermodynamic properties.
+    parentspecies,        #Either “decane”, “toluene”, “apin” for alpha-pinene or a combination of these connected by an underscore to indicate ambiguous                           #descent. In 243 cases, the parent species is “None” because it was not possible to retrieve it.
+    
+    cc =                  #The number of non-aromatic C=C bounds found in the molecule.
+      "C.C..non.aromatic.", 
+    
+    ccco =               #The number of “C=C-C=O” structures found in non-aromatic rings in the molecule.
+      "C.C.C.O.in.non.aromatic.ring",
+    
+    hydroxyl_alkl =      #The number of the alkylic hydroxyl groups found in the molecule.
+      "hydroxyl..alkyl.",
+    
+    aldehyde,            #The number of aldehyde groups in the molecule.
+    ketone,              #The number of ketone groups in the molecule.
+    
+    carboxylic_acid =    #The number of carboxylic acid groups in the molecule.
+      "carboxylic.acid",
+    ester,               #The number of ester groups in the molecule.
+    
+    ether_alicyclic =    #The number of alicyclic ester groups in the molecule.
+      "ether..alicyclic.",
+    nitrate,             #The number of alicyclic nitrate groups in the molecule
+    nitro,               #The number of nitro ester groups in the molecule
+    
+    aromatic_hydroxyl =
+    "aromatic.hydroxyl", #The number of alicyclic aromatic hydroxyl groups in the molecule.
+    
+    carbonylperoxynitrate, #The number of carbonylperoxynitrate groups in the molecule.
+    peroxide,            #The number of peroxide groups in the molecule
+    hydroperoxide,       #The number of hydroperoxide groups in the molecule.
+    carbonylperoxyacid,  #The number of carbonylperoxyacid groups found in the molecule
+    nitroester,           #The number of nitroester groups found in the molecule
+    pSat_Pa,              #The saturation vapour pressure of the molecule calculated by COSMOtherm (Pa)
+  ) |> 
+  dplyr::select(    # move response variable to the front
+    id,
+    pSat_Pa,
+    everything()
+  )
+
+#naniar::vis_miss(gecko)
+
+var.type <- gecko |> map(class) |> unlist() |> data.frame()
+names(var.type) <- "var_type"
+#var.type
+
+#var.type |> 
+#  filter(
+#    var_type == "character"
+#  )
+
+```
+
+```{r include= FALSE, message = FALSE, warning=FALSE}
+
+#Figure 1
+
+gecko$parentspecies |> table()
+# "None" is not an actual category according to description, NA was used to replace it
+gecko <- 
+  gecko |> 
+  mutate(
+   parentspecies = 
+     ifelse(
+       parentspecies == "None",
+       NA,
+       parentspecies
+   )
+  )
+
+#extract categorical variable 
+category_var <- gecko[,c("id", "parentspecies")]
+
+#one hot encoding
+gecko_cat <- category_var |> fastDummies::dummy_cols(select_columns = "parentspecies")
+#remove NA
+gecko_cat$parentspecies_NA <- NULL
+
+new.cat.name <- paste0("ohe_",names(gecko_cat[,-c(1,2)])) #ohe for one hot encoding
+names(gecko_cat) <- c("id","parentspecies", new.cat.name)
+gecko_num <- 
+  gecko |> 
+  dplyr::select(
+    -parentspecies
+  )
+
+gecko_cat
+```
+
+In the initial stages of data preprocessing, we conducted a thorough examination of the dataset. First, we checked for missing values across the features and found none. Subsequently, we assessed the feature types, identifying a single discrete feature in the data - "parentspecies". For "parentspecies", we replaced "None" with NA and performed one-hot encoding, generating six additional variables:
+
+- ohe_parentspecies_apin 
+- ohe_parentspecies_apin_decane
+- ohe_parentspecies_apin_decane_toluene
+- ohe_parentspecies_apin_toluene
+- ohe_parentspecies_decane
+- ohe_parentspecies_decane_toluene
+
+Both the original discrete feature and its one-hot encoding counterparts were retained, with the latter distinguished by the prefix "ohe_.". 
+
+```{r echo= FALSE, message = FALSE, warning=FALSE}
+n.of.unique <- 
+  gecko_num |> 
+  map(table) |> 
+  map(length) |> 
+  unlist() |> 
+  data.frame() |> 
+  rename("Number of unique values" = 1) 
+#n.of.unique
+
+ordinal.var.names <- n.of.unique |> filter(`Number of unique values` < 50) |> rownames()
+
+continuous.var.names <- 
+  n.of.unique |> 
+  filter(`Number of unique values` >= 50) |> 
+  rownames() |> 
+  stringr::str_remove_all("id")
+
+gecko_num |> 
+  select(one_of(continuous.var.names)) |> 
+  pivot_longer(everything(), names_to = "variable", values_to = "value") |> 
+  ggplot(
+    aes(x = value)
+  )+
+  geom_histogram() +
+  facet_wrap(~variable, scales = "free")+
+  theme_bw() +
+  ggtitle("Figure 1")
+```
+
+Following the initial categorization of features, a tailored approach to classify numeric features into ordinal and continuous was adopted based on their characteristics. Ordinal features, identified by less than 50 unique values, did not undergo transformations and retained their ordinal nature to ensure the preservation of critical data meaning. This was decided in recognizing the importance of preserving the ordinal nature of the data, particularly when the order holds significant meaning and so we decided against transforming ordinal features to normality. 
+
+Conversely, continuous features were marked by a cutoff of more 50 unique values. However, scrutiny of the initial distribution of continuous variables revealed skewness, as depicted in Figure 1. In response, we explored the application of logarithmic transformations on these variables to approximate normality. This transformation resulted in the creation of three additional variables prefixed with "trans_." This consideration aimed to mitigate the observed skewness and enhance the normality of the continuous variables for improved model performance. 
+
+```{r echo= FALSE, message = FALSE, warning=FALSE}
+gecko_num <- 
+  gecko_num |> 
+  mutate(trans_NumOfConf = NumOfConf^0.3)
+
+var_label(gecko_num$trans_NumOfConf) <- "NumOfConf^0.3 transformation"
+
+gecko_num <- 
+  gecko_num |> 
+  mutate(trans_MW = MW^0.5)
+
+var_label(gecko_num$trans_MW) <- "MW^0.5 transformation"
+
+gecko_num <- 
+  gecko_num |> 
+  mutate(trans_pSat_Pa = pSat_Pa |> log())
+
+var_label(gecko_num$trans_pSat_Pa) <- "log(pSat_Pa) transformation"
+```
+
+```{r echo= FALSE, message = FALSE, warning=FALSE}
+# scale all columns except id
+gecko_num_scaled <- scale(gecko_num[,-1]) |> data.frame()
+# add id column
+gecko_num_scaled <- 
+  gecko_num_scaled |> 
+  mutate(id = gecko_num$id) |> 
+  select(id, everything())
+
+gecko_num_scaled |> 
+  dplyr::select(
+    starts_with("trans_")
+  ) |> 
+  pivot_longer(
+    everything(),
+    values_to = "values",
+    names_to = "variables"
+    ) |> 
+  ggplot(
+    aes(x = values)
+  ) +
+  geom_histogram() +
+  facet_wrap(
+    ~variables, 
+    scales = "free"
+  )+
+  theme_bw() +
+  ggtitle("Figure 2")
+```
+
+We undertook uniform scaling on the entire dataset, which included both continuous and ordinal data, while excluding discrete features. This scaling aimed to address variations in the number of levels across different features, promoting a more consistent and comparable dataset and contributing to its approximation of normality, as shown in Figure 2.
+
+Although the dataset was examined for outliers, a decision was made to leave them untreated due to a lack of domain knowledge. This cautious approach was particularly important to prevent outliers from unduly influencing subsequent modeling phases. Notably, as researchers not involved in the data collection process and lacking expertise in the specific domain of chemistry, determining whether a value is an outlier or not became a challenging task. An important consideration in our approach was acknowledging the difficulty of defining outliers in categorical variables, as some values may not be outliers but rather rare categories or levels. Consequently, outliers were only identified and examined in the context of transformed continuous variables, as opposed to categorical variables. Specifically, we defined outliers as values deviating more than 3.29 standard deviations from the mean in the present analysis. 
+
+##### Figure 3
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig1.png")) 
+```
+
+##### Figure 4
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig2.png")) 
+```
+
+##### Figure 5
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig3.png")) 
+```
+
+##### Figure 6
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig4.png"))
+```
+
+A correlation matrix was then created to assess relationships between variables, revealing notable co-linearity, particularly among features with "Num" in their names.The correlation matrices were created for all continuous variables, both before and after transformation, as well as ordinal variables, serving as crucial references for our subsequent machine learning endeavors. Given the considerable number of variables, we opted to organize the correlation analysis into four distinct matrices (Figures 2-5). In each matrix, the initial two rows and columns consistently featured the response variable pSat_Pa and its logarithmically transformed counterpart trans_pSat_Pa. This systematic arrangement allowed for a focused examination of the relationship between the response variable and other variables in each matrix, facilitating a nuanced understanding of the intricate interplay within different subsets of our dataset.
+
+```{r}
+
+gecko_num_scaled <- 
+  gecko_num_scaled |> 
+  mutate(
+    new_MW_hydroxyl_alkl_interaction = scale(MW * hydroxyl_alkl) |> as.numeric()
+  )
+
+var_label(gecko_num_scaled$new_MW_hydroxyl_alkl_interaction) <- "Interaction between molecular weight and the number of hydroxyl groups "
+
+gecko_num_scaled <- 
+  gecko_num_scaled |> 
+  mutate(
+    new_polarity_score = 
+       scale(
+          (3 * hydroxyl_alkl +
+          4 * carboxylic_acid + 
+          2 * aldehyde + 
+          2 * ketone + 
+          2 * ester + 
+          3 * nitro)
+        ) |> # it is further taken to the power of 0.4, for approximating normaility
+      as.numeric()
+  )
+```
+
+In enhancing our capacity to capture intricate relationships within the data, we strategically introduced novel features. These additions included a weighted sum of functional groups, an interaction term accounting for the joint effects of molecular weight and hydroxyl groups, and principal components derived from variables bearing the label "Num" in their names. These novel features, prefixed with "new_," were exploratory in nature, aimed at providing a more nuanced understanding of the molecular characteristics under consideration. Notably, we introduced an interaction term between molecular weight and hydroxyl groups to comprehensively account for their combined influence on vapor pressure. Moreover, the derivation of polarity scores which incorporated weighted functional groups, also offered a refined measure of molecular characteristics.
+
+```{r fig.height= 6, fig.width= 10}
+# all vars with "Num" in name
+num.vars <- gecko_num_scaled |> 
+  dplyr::select(
+    contains("Num")&!contains("trans")
+  ) 
+
+# do PCA
+pca_result <- prcomp(num.vars)
+
+#turn first two principal components into values (they explained 61.24% variability)
+pca.vars <- pca_result$x[,1:2] |> data.frame()
+
+#save the two components into the data
+gecko_num_scaled <-  
+  gecko_num_scaled |> 
+  mutate(
+    new_num_pca_1 = pca.vars$PC1,
+    new_num_pca_2 = pca.vars$PC2
+  )
+
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr")
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, 
+         #cex = cex.cor * r
+         )
+}
+
+gecko_num_scaled |> 
+  dplyr::select(
+    trans_pSat_Pa,
+    starts_with("new_")
+  ) |> 
+  pairs(
+    lower.panel = panel.smooth,
+    upper.panel = panel.cor,
+    diag.panel = panel.hist,
+    main = "Figure 7: Correlation matrix of the newly-created variable and response variable"
+    )
+```
+
+The correlation matrix revealed high collinearity among the new features with the "Num" label in their names. To address this, an attempt was made to condense them into a reduced set of variables using Principal Component Analysis, with a subsequent examination of their correlation with the response variable. A cautionary note was issued regarding the usage of these newly introduced variables, urging careful consideration due to their exploratory nature.
+
+Lastly, we presented use cases showcasing the creation of a final dataset that included both original and generated variables. For modeling purposes, the inclusion of variables prefixed with "new_" was discouraged, emphasizing the preference for transformed continuous variables marked with "trans_" in their names. The discrete variable "parentspecies" underwent one-hot encoding, providing suitable alternatives for machine learning algorithms. The recommended dataset for the machine learning task encompassed all original variables as their scaled version, transformed continuous variables, and the replacement of the original multi-level variable "parentspecies" with its one-hot encoding equivalents. Importantly, newly created variables were excluded from this preferred set. These steps were aimed at optimizing the dataset for the ensuing machine learning analysis while emphasizing clarity and efficiency in variable selection.
+
+# Machine Learning Approach
+
+Now, we aim to assess the performance of various regression models through comprehensive cross-validation on the entire dataset. The chosen models encompass a diverse range of approaches commonly employed in regression problem-solving. The selected models for evaluation include linear regression, incorporating regularization techniques for enhanced robustness, a random forest model known for its ensemble learning capabilities, a support vector regressor leveraging support vector machines, and a gradient boosting regressor recognized for its ability to optimize predictive accuracy. The rationale behind opting for these specific models lies in their versatility and popularity within the machine learning domain, providing a well-rounded exploration of regression methodologies. The comparative analysis of these models will contribute valuable insights into their effectiveness for the given dataset, guiding subsequent steps in the model selection process.
+
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "figure 8.png")) 
+```
+
+In Figure 8, the baseline performance scores for each model are presented. We also note that a cross-validation approach is employed to determine the optimal Lasso and Ridge regularization parameters. The ElasticNet method, configured with a 10-fold cross-validation, is utilized for this purpose. Upon fitting the model to the input features and the logarithmically transformed response variable, the obtained optimal regularization parameters are scrutinized. Notably, the decision is made to exclusively proceed with Lasso regression, driven by superior results observed in personal experimentation and the added benefit of generating coefficients with zero values. This strategic selection is expected to contribute to a more parsimonious model while preserving predictive accuracy.
+
+# Feature and Parameter Selection
+
+Following the computation of baseline scores, the focus shifts to feature selection, a critical step in enhancing model efficiency. Several techniques are employed for this purpose, ensuring a comprehensive exploration of the feature space. The process encompasses leveraging insights from the coefficients of the regularized linear regression model, utilizing Sklearn's built-in feature selection methods, and incorporating Principal Component Analysis (PCA) to discern the pivotal components in the transformed feature space. This multifaceted approach to feature selection is driven by a synthesis of statistical analysis, machine learning methodologies, and domain-specific knowledge. The culmination of these efforts results in a meticulously curated set of features, strategically chosen to optimize predictive accuracy while mitigating model complexity. The subsequent phase involves fine-tuning model parameters through cross-validation techniques, a pivotal step to ensure the model's robustness and generalizability across diverse datasets. The overarching goal is to craft a model that adeptly balances complexity and accuracy, aligning with the specific requirements of the regression task at hand.
+
+To enhance the representation of the categorical variable "parentspecies", the one-hot encoding strategy was used in the Data Processing and Analysis section to generate six additional binary variables. These variables effectively capture the diverse categories within the "parentspecies" feature. Each binary variable is associated with a specific combination or individual category, providing a more nuanced and comprehensive representation of the parent species feature in our dataset. This one-hot encoding approach facilitates the integration of categorical information into machine learning models, enabling a more accurate and robust analysis of the data.
+
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "figure 9.png"))
+```
+
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "figure 10.png")) 
+```
+
+In the initial stage of feature selection, we focused on leveraging the coefficients derived from linear regression, as shown by Figures 9 and 10. This method involved scrutinizing the impact and significance of each feature on the regression model's performance. By assessing the weights assigned to each feature in the linear regression model, we gained insights into their individual contributions to the target variable. Features exhibiting substantial coefficients are deemed more influential, guiding the selection process towards those with significant predictive power. This approach provided a foundation for identifying and retaining features that play a pivotal role in enhancing the model's accuracy and effectiveness. The subsequent phases of feature selection built upon these initial insights to create a refined set of features for the regression model.
+
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "figure 11.png")) 
+```
+
+Afterwards, we turned to the built-in feature selection methods provided by the Sklearn library, and focused on the F scores calculated by the f_regression function for each feature - demonstrated in Figure 11. The F scores serve as a metric to gauge the significance of individual features in contributing to the model's predictive performance. 
+
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "figure 12.png")) 
+```
+
+
+The visualization of the number of features against cross-validation scores as shown by Figure 12 provides a clear and insightful depiction of the relationship between feature inclusion and model performance. The plot, with the number of features on the x-axis and cross-validation scores on the y-axis, offers a visual guide to discerning the optimal feature subset that maximizes predictive accuracy. This analysis facilitates an informed decision-making process regarding feature selection, ensuring that the chosen features strike a balance between relevance and computational efficiency.
+
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "figure 13.png")) 
+```
+
+Our last approach involves utilizing Principal Component Analysis (PCA). By analyzing the cumulative sum of explained variance in relation to the number of principal components, we gained valuable insights into the optimal dimensionality reduction. In this context, Figure 13 depicts the cumulative sum of explained variance on the y-axis and the number of principal components on the x-axis. The inflection point in the plot signifies the optimal number of principal components that effectively capture the dataset's variability. Striking a balance between dimensionality reduction and retaining crucial information, this step contributed significantly to the refinement of our feature set. The best number of principal components at 28 serve as a judicious selection to preserve essential information while enhancing model efficiency.
+
+# Results
+
+```{r}
+knitr::include_graphics(file.path(here(), "data", "pic", "figure 14.png")) 
+```
+
+As we can see from Figure 14, the SVR model, after rigorous training and feature engineering, emerged as the most powerful model for predicting our response variable, pSat_Pa.
+
+We also tried creating polynomial features up to the second degree from the original features and then evaluating the performance of the linear regression model using these polynomial features through cross-validation, however, this only resulted in a cross-validation R2 score of 0.7226. 
+
+As a result, we strived to optimize the SVR model through parameter tuning, leading to improved predictive accuracy. The final SVR model, with a carefully selected set of parameters, demonstrated commendable performance, achieving an R2 score of 0.751 through cross-validation, and 0.695 on Kaggle.
+
+# Conclusion
+
+The key insights that we obtained after this project are:
+
+- Diverse feature types, including discrete and continuous, prompted the application of one-hot encoding to handle the discrete feature ('parentspecies'). 
+
+- Continuous features underwent categorization as ordinal or continuous, with some being transformed to approximate normality for improved model performance. 
+
+- While outliers were examined, they were not addressed due to a lack of domain knowledge. 
+
+- Correlation analyses uncovered high co-linearity, particularly among features with "Num" in their names, suggesting potential redundancy. 
+
+- Novel variables, created through exploration, included a weighted sum of functional groups, an interaction term between molecular weight and hydroxyl groups, and principal components obtained via PCA. 
+
+- Use cases demonstrated the selection of variable subsets based on preferences, encompassing original, transformed, and one-hot-encoded features. 
+
+- Four popular regression models—linear regression, random forest, support vector regressor, and gradient boosting regressor—were chosen, with Lasso regularization favored for linear regression based on cross-validation results. 
+
+- Feature selection techniques, encompassing linear regression coefficients, Sklearn's built-in methods, and Principal Component Analysis, constituted a nuanced process guided by the analysis of feature importance. 
+
+- Through this, we were able to acheive a holistic understanding of the dataset, engineer features, and select an appropriate regression model, helping us understand the meticulous feature selection process aimed at balancing model complexity and predictive accuracy.
+
+As well, in the iterative wrangling phase of creating our ML model, we identified additional wrangling needs to further refine our dataset. Firstly, we created an unscaled log base 10 version of the response variable, trans_log10_noscale_pSat_Pa, to potentially improve model performance. We also addressed the presence of outliers in the dataset. An outlier flag was introduced as a binary variable, flag_outlier, indicating whether a data point was considered an outlier based on predetermined criteria. These criteria involved examining the standardized values of the response variable, trans_log10_noscale_pSat_Pa, as well as the transformed variables trans_MW and trans_NumOfConf. Any case with at least one outlier was flagged with a value of 1, while non-outliers received a value of 0. The dataset with outlier flags, named gecko_ml_outlier_flag, was then used to create a new dataset, gecko_ml_no_outlier, by filtering out all cases flagged as outliers.
+
+# Self-Grading Report
+
+Our group decided to give our deliverables a 5, as we believe that we demonstrated a comprehensive understanding of the project, and that we achieved exceptional results with a R2 score of 0.751. Furthermore, throughout our report, we applied relevant theory and skills that were amassed in the course and in other scientific sources. Our report and project utilized mature and detailed analysis of the data and the various machine learning approaches. Everything is succinct and addressed all potential doubts surrounding our model and feature selection. As well, our report clearly outlines key insights from the project, and demonstrates fundamental innovation and critical thinking. Finally, our deliverables are well-crafted, and are evident to be a Master's level research project.
+
+As well, our group decided to give ourselves a 5, as we worked very effectively and efficiently with each other. We had on point conversations, and utilized our own individual skills to further and enhance our objectives. Moreover, all three of us contributed our ideas, and took responsibility to ensure that our work was completed to the utmost quality. There were absolutely no arguments, and the environment we worked in was very inclusive and accepting of different ideas. In the end, all three of us learned applicable skills throughout this project that would serve us well in the future, and we plan to stay friends afterwards as well. 
