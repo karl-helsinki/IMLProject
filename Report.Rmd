@@ -3,10 +3,10 @@ title: "`r format(params$term)` Project Report\n \\vspace{0.1in} "
 author: "Dominik Kuczkowski \n Guang Rong \n Karl Zhu \\vspace{1in} "
 date: "December 23, 2023"
 output:
-  html_document:
-    df_print: paged
   pdf_document:
     fig_caption: yes
+  html_document:
+    df_print: paged
 subtitle: ''
 params:
   term: Fall 2023 Introduction to Machine Learning
@@ -16,10 +16,12 @@ params:
 knitr::opts_chunk$set(
     echo = FALSE,
     message = FALSE,
-    warning = FALSE
+    warning = FALSE,
+    out.width="480px"
 )
 library(tidyverse)
 library(reticulate)
+library(knitr)
 library(here)
 stopifnot(require('here'))
 stopifnot(require('haven'))
@@ -59,7 +61,7 @@ Team Members
 - Guang Rong
 - Karl Zhu
 
-**Kaggle Team Name**: Team 16 
+**Kaggle Team Name**: Group 16 
 
 The motivation behind this project is rooted in the desire to accurately predict vapor pressure through the development of a robust predictive model that leverages the GeckoQ dataset - encompassing molecular characteristics, functional groups, and structural attributes. 
 
@@ -276,22 +278,22 @@ Although the dataset was examined for outliers, a decision was made to leave the
 
 ##### Figure 3
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig1.png")) 
+knitr::include_graphics(file.path(here(), "data", "pic", "Matrix1.png"))  
 ```
 
 ##### Figure 4
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig2.png")) 
+knitr::include_graphics(file.path(here(), "data", "pic", "matrix2.png")) 
 ```
 
 ##### Figure 5
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig3.png")) 
+knitr::include_graphics(file.path(here(), "data", "pic", "matrix3.png"))  
 ```
 
 ##### Figure 6
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "cm_fig4.png"))
+knitr::include_graphics(file.path(here(), "data", "pic", "matrix4.png")) 
 ```
 
 A correlation matrix was then created to assess relationships between variables, revealing notable co-linearity, particularly among features with "Num" in their names.The correlation matrices were created for all continuous variables, both before and after transformation, as well as ordinal variables, serving as crucial references for our subsequent machine learning endeavors. Given the considerable number of variables, we opted to organize the correlation analysis into four distinct matrices (Figures 2-5). In each matrix, the initial two rows and columns consistently featured the response variable pSat_Pa and its logarithmically transformed counterpart trans_pSat_Pa. This systematic arrangement allowed for a focused examination of the relationship between the response variable and other variables in each matrix, facilitating a nuanced understanding of the intricate interplay within different subsets of our dataset.
@@ -388,13 +390,13 @@ Lastly, we presented use cases showcasing the creation of a final dataset that i
 
 As an initial step in finding the best model for our task, we assessed the performance of various regression models through comprehensive cross-validation on the training dataset. The chosen models encompass a diverse range of approaches commonly employed in regression problem-solving. Models selected for evaluation include:
 
-- linear regression, incorporating Lasso and Ridge regularization techniques for enhanced robustness, 
+- Linear regression, incorporating Lasso and Ridge regularization techniques for enhanced robustness, 
 
-- random forest model known for its ensemble learning capabilities, 
+- Random forest model known for its ensemble learning capabilities, 
 
-- support vector regressor leveraging radial basis function kernels
+- Support vector regressor leveraging radial basis function kernels
 
-- gradient boosting regressor recognized for its ability to optimize predictive accuracy. 
+- Gradient boosting regressor recognized for its ability to optimize predictive accuracy. 
 
 The rationale behind opting for these specific models lies in their versatility and popularity within the machine learning domain, providing a well-rounded exploration of regression methodologies. 
 They are also well aligned with the contents of the course and will give us an opportunity to better understand their inner workings. 
@@ -403,51 +405,21 @@ The comparative analysis of these models will contribute valuable insights into 
 ### 1. Baseline performance
 
 #### Table 1
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>baseline</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>lin_reg</th>
-      <td>0.709666</td>
-    </tr>
-    <tr>
-      <th>rf</th>
-      <td>0.714040</td>
-    </tr>
-    <tr>
-      <th>svr</th>
-      <td>0.747972</td>
-    </tr>
-    <tr>
-      <th>gbr</th>
-      <td>0.723740</td>
-    </tr>
-    <tr>
-      <th>elasticnet</th>
-      <td>0.707905</td>
-    </tr>
-  </tbody>
-</table>
-</div>
+\begin{table}[h]
+\centering
+\begin{tabular}{l|r}
+  \hline
+  \textbf{Model} & \textbf{Baseline R2 Scores} \\
+  \hline
+  Linear Regression & 0.709666 \\
+  Random Forest & 0.714040 \\
+  Support Vector Regression & 0.747972 \\
+  Gradient Boosting Regressor & 0.723740 \\
+  Elastic Net & 0.707905 \\
+  \hline
+\end{tabular}
+\caption{Baseline R2 Scores for Different Models}
+\end{table}
 
 In Table 1, the baseline performance scores for each model are presented. We also note that a cross-validation approach is employed to determine the optimal Lasso and Ridge regularization parameters. The ElasticNet method, configured with a 10-fold cross-validation, is utilized for this purpose. Upon fitting the model to the input features and the logarithmically transformed response variable, the obtained optimal regularization parameters are scrutinized. Notably, the decision is made to exclusively proceed with Lasso regression, driven by superior results observed in personal experimentation and the added benefit of generating coefficients with zero values. This strategic selection is expected to contribute to a more parsimonious model while preserving predictive accuracy.
 
@@ -456,13 +428,13 @@ In Table 1, the baseline performance scores for each model are presented. We als
 Following the computation of baseline scores, the focus shifts to feature selection, a critical step in enhancing model efficiency. Several techniques are employed for this purpose, ensuring a comprehensive exploration of the feature space. 
 In our experiments we tested the following approaches:
 
-- feature selection based on the coefficients of the regularized linear regression model, 
+- Feature selection based on the coefficients of the regularized linear regression model, 
 
-- feature selection based on F-scores of each feature
+- Feature selection based on F-scores of each feature
 
-- incorporation of Principal Component Analysis (PCA) to discern the pivotal components in the transformed feature space
+- Incorporation of Principal Component Analysis (PCA) to discern the pivotal components in the transformed feature space
 
-- utilization polynomial feature transformation to discover non-linear relationships between features
+- Utilization polynomial feature transformation to discover non-linear relationships between features
 
 This multifaceted approach to feature selection was driven by a synthesis of statistical analysis, data exploration, and machine learning methodologies familiar to us. 
 The culmination of these efforts results in four distinct set of features, strategically chosen to optimize regression error while mitigating model complexity. 
@@ -472,11 +444,12 @@ The subsequent phase involves fine-tuning model parameters through cross-validat
 #### a) Feature selection based on the coefficients of the regularized linear regression model
 
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure_9.png"), dpi=10)
+knitr::include_graphics(file.path(here(), "data", "pic", "figure_9.png"))
 ```
 
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure_10.png"), dpi=10) 
+knitr::include_graphics(file.path(here(), "data", "pic", "figure_10.png")) 
+knitr::opts_chunk$set(out.width="280px")
 ```
 
 In the initial stage of feature selection, we focused on leveraging the coefficients of a linear regression model with regularization. 
@@ -491,17 +464,17 @@ Red dot on the plot shows a feature subset with the best cross-validation score,
 Our experiments showed that models fitted on smaller subsets of features didn't perform better on test set.
 This approach provided a foundation for identifying and retaining features that play a pivotal role in enhancing the model's accuracy and effectiveness. 
 
-
 #### b) Feature selection based on F-scores of each feature
 
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure_11.png"), dpi=10) 
+knitr::include_graphics(file.path(here(), "data", "pic", "figure_11.png"))
+knitr::opts_chunk$set(out.width="420px")
 ```
 
 Afterwards, we turned to the built-in feature selection methods provided by the Sklearn library, and focused on the F scores calculated by the f_regression function for each feature - demonstrated in Figure 11. The F scores serve as a metric to gauge the significance of individual features in contributing to the model's predictive performance. 
 
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure_12.png"), dpi=10) 
+knitr::include_graphics(file.path(here(), "data", "pic", "figure_12.png")) 
 ```
 
 
@@ -512,7 +485,7 @@ Our analysis facilitates an informed decision-making process regarding feature s
 #### c) Incorporation of PCA
 
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure_13.png"), dpi=10) 
+knitr::include_graphics(file.path(here(), "data", "pic", "figure_13.png"))
 ```
 
 Our next approach involves utilizing Principal Component Analysis (PCA). 
@@ -524,88 +497,51 @@ The best number of principal components at 20 serve as a judicious selection to 
 
 #### d) Utilization of polynomial features
 
-The last approach to feature selection we used, was to add new features, created as polynomial combinations of existing features.
-We included polynomial relations of degree 2. This approach ensured that non-linear relationships between features, were included in the dataset.
+The last approach to feature selection we used, was to add new features, created as polynomial combinations of existing features. 
+We included polynomial relations of degree 2. This approach ensured that non-linear relationships between features, were included in the dataset. 
 The assumption that there were non-linear relations in the dataset, was based on the baseline results of our selected models. 
-Support Vector Regressor that utilized non-linear kernels, achieved best r2 score.
+Support Vector Regressor that utilized non-linear kernels, achieved best R2 score.
 
-# Final results
+# Final Results
 
 #### Table 2
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
+\begin{table}[h]
+\centering
+\begin{tabular}{lccccc}
+\hline
+\textbf{Model} & \textbf{Baseline R2 Scores}\\
+\hline
+Linear Regression & 0.709666 \\
+Random Forest & 0.714040 \\
+Support Vector Regression & 0.747972 \\
+Gradient Boosting Regressor & 0.723740 \\
+Elastic Net & 0.707905 \\
+\hline
+\textbf{Linear Regression Coefficients Features - R2 Score} & \textbf{SkLearn Features - R2 Score}\\
+\hline
+0.708340 & 0.709697\\
+0.704838 & 0.713530\\
+0.741367 & 0.748168\\
+0.718606 & 0.723827\\
+0.708032 & 0.707976\\
+\hline
+\textbf{Principal Component Analysis Features - R2 Score} & \textbf{Polynomial Features - R2 Scores} \\
+\hline
+0.709684 & 0.746813 \\
+0.710483 & 0.715941 \\
+0.747972 & 0.737504 \\
+0.704239 & 0.728260 \\
+0.707652 & 0.742700 \\
+\hline
+\end{tabular}
+\caption{R2 Scores for Different Models}
+\end{table}
 
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>baseline</th>
-      <th>lin reg features</th>
-      <th>skb features</th>
-      <th>pca</th>
-      <th>Polynomial features</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>lin_reg</th>
-      <td>0.709666</td>
-      <td>0.708340</td>
-      <td>0.709697</td>
-      <td>0.709684</td>
-      <td>0.746813</td>
-    </tr>
-    <tr>
-      <th>rf</th>
-      <td>0.714040</td>
-      <td>0.704838</td>
-      <td>0.713530</td>
-      <td>0.710483</td>
-      <td>0.715941</td>
-    </tr>
-    <tr>
-      <th>svr</th>
-      <td>0.747972</td>
-      <td>0.741367</td>
-      <td>0.748168</td>
-      <td>0.747972</td>
-      <td>0.737504</td>
-    </tr>
-    <tr>
-      <th>gbr</th>
-      <td>0.723740</td>
-      <td>0.718606</td>
-      <td>0.723827</td>
-      <td>0.704239</td>
-      <td>0.728260</td>
-    </tr>
-    <tr>
-      <th>elasticnet</th>
-      <td>0.707905</td>
-      <td>0.708032</td>
-      <td>0.707976</td>
-      <td>0.707652</td>
-      <td>0.742700</td>
-    </tr>
-  </tbody>
-</table>
-</div>
 
 In our final project phase, we used all of the knowledge gained during data exploration and applied it to fit a group of models.
-Table 2 summarizes the results of our rigorous training and feature engineering experiments. Each row of the table contains r2 cross validation scores for given model, achieved on specific dataset.
+Table 2 summarizes the results of our rigorous training and feature engineering experiments. Each row of the table contains R2 cross validation scores for given model, achieved on specific dataset.
 
-Based on table 2, we identified a combination of models and dataset that gave us the best CV r2 scores. It consisted of 6 models that improved their respective r2 scores in comparison with the baseline scores.
+Based on table 2, we identified a combination of models and dataset that gave us the best CV R2 scores. It consisted of 6 models that improved their respective r2 scores in comparison with the baseline scores.
 These models were:
 
  - SVR fitted on all features
@@ -629,7 +565,7 @@ knitr::include_graphics(file.path(here(), "data", "pic", "figure_14.png"), dpi=1
 
 
 Looking at the differences in predicted values distributions, gave us an idea to create an ensemble model, which would average the scores of the selected 6 models. 
-This approach achieved an r2 score of **0.70564** on Kaggle and turned out to be our best. 
+This approach achieved an R2 score of **0.70564** on Kaggle and turned out to be our best. 
 
 
 # Conclusion
@@ -656,17 +592,17 @@ The key insights that we obtained after this project are:
 
 As well, in the iterative wrangling phase of creating our ML model, we identified additional wrangling needs to further refine our dataset. Firstly, we created an unscaled log base 10 version of the response variable, trans_log10_noscale_pSat_Pa, to potentially improve model performance. We also addressed the presence of outliers in the dataset. An outlier flag was introduced as a binary variable, flag_outlier, indicating whether a data point was considered an outlier based on predetermined criteria. These criteria involved examining the standardized values of the response variable, trans_log10_noscale_pSat_Pa, as well as the transformed variables trans_MW and trans_NumOfConf. Any case with at least one outlier was flagged with a value of 1, while non-outliers received a value of 0. The dataset with outlier flags, named gecko_ml_outlier_flag, was then used to create a new dataset, gecko_ml_no_outlier, by filtering out all cases flagged as outliers.
 
-# Key decisions and findings 
+# Key Decisions and Findings 
 
 Here we summarize our work into key decisions and findings that lead us to the current results.
 
-## Wrangling stage
+## Wrangling Stage
 
 In the data, there is no clear borderline for some of the ordinal and continuous features. We set an arbitrary rule to distinguish based on the number of levels(n = 50 levels cutoff).  This allows for an organized strategy in treating and understanding the features. 
 
 Outliers were checked for continuous features. They were not handled in the original dataset due to our lack of domain knowledge. But during the modeling phase we discussed and created an additional dataset with outliers removed, to fit the model and compare the accuracy with initial models. 
 
-Initially, variables in test set were scaled using test mean and standard deviation. During the modeling phase, we reflected on the practice and decided to create a set of new scaled variables using the statistics in training set. 
+Initially, variables in test set were scaled using the test mean and standard deviation. During the modeling phase, we reflected on the practice and decided to create a set of new scaled variables using the statistics in training set. 
 
 # Self-Grading Report
 
