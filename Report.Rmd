@@ -386,60 +386,251 @@ Lastly, we presented use cases showcasing the creation of a final dataset that i
 
 # Machine Learning Approach
 
-Now, we aim to assess the performance of various regression models through comprehensive cross-validation on the entire dataset. The chosen models encompass a diverse range of approaches commonly employed in regression problem-solving. The selected models for evaluation include linear regression, incorporating regularization techniques for enhanced robustness, a random forest model known for its ensemble learning capabilities, a support vector regressor leveraging support vector machines, and a gradient boosting regressor recognized for its ability to optimize predictive accuracy. The rationale behind opting for these specific models lies in their versatility and popularity within the machine learning domain, providing a well-rounded exploration of regression methodologies. The comparative analysis of these models will contribute valuable insights into their effectiveness for the given dataset, guiding subsequent steps in the model selection process.
+As an initial step in finding the best model for our task, we assessed the performance of various regression models through comprehensive cross-validation on the training dataset. The chosen models encompass a diverse range of approaches commonly employed in regression problem-solving. Models selected for evaluation include:
+
+- linear regression, incorporating Lasso and Ridge regularization techniques for enhanced robustness, 
+
+- random forest model known for its ensemble learning capabilities, 
+
+- support vector regressor leveraging radial basis function kernels
+
+- gradient boosting regressor recognized for its ability to optimize predictive accuracy. 
+
+The rationale behind opting for these specific models lies in their versatility and popularity within the machine learning domain, providing a well-rounded exploration of regression methodologies. 
+They are also well aligned with the contents of the course and will give us an opportunity to better understand their inner workings. 
+The comparative analysis of these models will contribute valuable insights into their effectiveness for the given dataset, guiding subsequent steps in the model selection process.
+
+### 1. Baseline performance
+
+#### Table 1
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>baseline</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>lin_reg</th>
+      <td>0.709666</td>
+    </tr>
+    <tr>
+      <th>rf</th>
+      <td>0.714040</td>
+    </tr>
+    <tr>
+      <th>svr</th>
+      <td>0.747972</td>
+    </tr>
+    <tr>
+      <th>gbr</th>
+      <td>0.723740</td>
+    </tr>
+    <tr>
+      <th>elasticnet</th>
+      <td>0.707905</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+In Table 1, the baseline performance scores for each model are presented. We also note that a cross-validation approach is employed to determine the optimal Lasso and Ridge regularization parameters. The ElasticNet method, configured with a 10-fold cross-validation, is utilized for this purpose. Upon fitting the model to the input features and the logarithmically transformed response variable, the obtained optimal regularization parameters are scrutinized. Notably, the decision is made to exclusively proceed with Lasso regression, driven by superior results observed in personal experimentation and the added benefit of generating coefficients with zero values. This strategic selection is expected to contribute to a more parsimonious model while preserving predictive accuracy.
+
+### 2. Feature and Parameter Selection
+
+Following the computation of baseline scores, the focus shifts to feature selection, a critical step in enhancing model efficiency. Several techniques are employed for this purpose, ensuring a comprehensive exploration of the feature space. 
+In our experiments we tested the following approaches:
+
+- feature selection based on the coefficients of the regularized linear regression model, 
+
+- feature selection based on F-scores of each feature
+
+- incorporation of Principal Component Analysis (PCA) to discern the pivotal components in the transformed feature space
+
+- utilization polynomial feature transformation to discover non-linear relationships between features
+
+This multifaceted approach to feature selection was driven by a synthesis of statistical analysis, data exploration, and machine learning methodologies familiar to us. 
+The culmination of these efforts results in four distinct set of features, strategically chosen to optimize regression error while mitigating model complexity. 
+
+The subsequent phase involves fine-tuning model parameters through cross-validation techniques, a pivotal step to ensure the model's robustness and generalizability across diverse datasets. The overarching goal is to craft a model that adeptly balances complexity and accuracy, aligning with the specific requirements of the regression task at hand.
+
+#### a) Feature selection based on the coefficients of the regularized linear regression model
 
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure 8.png")) 
+knitr::include_graphics(file.path(here(), "data", "pic", "figure_9.png"), dpi=10)
 ```
 
-In Figure 8, the baseline performance scores for each model are presented. We also note that a cross-validation approach is employed to determine the optimal Lasso and Ridge regularization parameters. The ElasticNet method, configured with a 10-fold cross-validation, is utilized for this purpose. Upon fitting the model to the input features and the logarithmically transformed response variable, the obtained optimal regularization parameters are scrutinized. Notably, the decision is made to exclusively proceed with Lasso regression, driven by superior results observed in personal experimentation and the added benefit of generating coefficients with zero values. This strategic selection is expected to contribute to a more parsimonious model while preserving predictive accuracy.
-
-# Feature and Parameter Selection
-
-Following the computation of baseline scores, the focus shifts to feature selection, a critical step in enhancing model efficiency. Several techniques are employed for this purpose, ensuring a comprehensive exploration of the feature space. The process encompasses leveraging insights from the coefficients of the regularized linear regression model, utilizing Sklearn's built-in feature selection methods, and incorporating Principal Component Analysis (PCA) to discern the pivotal components in the transformed feature space. This multifaceted approach to feature selection is driven by a synthesis of statistical analysis, machine learning methodologies, and domain-specific knowledge. The culmination of these efforts results in a meticulously curated set of features, strategically chosen to optimize predictive accuracy while mitigating model complexity. The subsequent phase involves fine-tuning model parameters through cross-validation techniques, a pivotal step to ensure the model's robustness and generalizability across diverse datasets. The overarching goal is to craft a model that adeptly balances complexity and accuracy, aligning with the specific requirements of the regression task at hand.
-
-To enhance the representation of the categorical variable "parentspecies", the one-hot encoding strategy was used in the Data Processing and Analysis section to generate six additional binary variables. These variables effectively capture the diverse categories within the "parentspecies" feature. Each binary variable is associated with a specific combination or individual category, providing a more nuanced and comprehensive representation of the parent species feature in our dataset. This one-hot encoding approach facilitates the integration of categorical information into machine learning models, enabling a more accurate and robust analysis of the data.
-
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure 9.png"))
+knitr::include_graphics(file.path(here(), "data", "pic", "figure_10.png"), dpi=10) 
 ```
 
-```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure 10.png")) 
-```
+In the initial stage of feature selection, we focused on leveraging the coefficients of a linear regression model with regularization. 
+Our idea was to fit a model with both Lasso and Ridge regularization terms and then analyze its coefficients. 
+Plot on Figure 9 shows the absolute values of such linear regression model coefficients. 
+As can be seen there, a lot of the features have very small coefficients.
 
-In the initial stage of feature selection, we focused on leveraging the coefficients derived from linear regression, as shown by Figures 9 and 10. This method involved scrutinizing the impact and significance of each feature on the regression model's performance. By assessing the weights assigned to each feature in the linear regression model, we gained insights into their individual contributions to the target variable. Features exhibiting substantial coefficients are deemed more influential, guiding the selection process towards those with significant predictive power. This approach provided a foundation for identifying and retaining features that play a pivotal role in enhancing the model's accuracy and effectiveness. The subsequent phases of feature selection built upon these initial insights to create a refined set of features for the regression model.
+By assessing the weights assigned to each feature in the linear regression model, we gained insights into their individual contributions to the target variable. 
+Features exhibiting substantial coefficients are deemed more influential, guiding the selection process towards those with significant predictive power. 
+Figure 10 shows the cross validation r2 score, achieved on subsets of features. The features were added sequentially with decreasing feature coefficient.
+Red dot on the plot shows a feature subset with the best cross-validation score, which contained 17 features. Even though there were smaller subsets with comparable r2 score, we chose to use the one with the best score.
+Our experiments showed that models fitted on smaller subsets of features didn't perform better on test set.
+This approach provided a foundation for identifying and retaining features that play a pivotal role in enhancing the model's accuracy and effectiveness. 
+
+
+#### b) Feature selection based on F-scores of each feature
 
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure 11.png")) 
+knitr::include_graphics(file.path(here(), "data", "pic", "figure_11.png"), dpi=10) 
 ```
 
 Afterwards, we turned to the built-in feature selection methods provided by the Sklearn library, and focused on the F scores calculated by the f_regression function for each feature - demonstrated in Figure 11. The F scores serve as a metric to gauge the significance of individual features in contributing to the model's predictive performance. 
 
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure 12.png")) 
+knitr::include_graphics(file.path(here(), "data", "pic", "figure_12.png"), dpi=10) 
 ```
 
 
-The visualization of the number of features against cross-validation scores as shown by Figure 12 provides a clear and insightful depiction of the relationship between feature inclusion and model performance. The plot, with the number of features on the x-axis and cross-validation scores on the y-axis, offers a visual guide to discerning the optimal feature subset that maximizes predictive accuracy. This analysis facilitates an informed decision-making process regarding feature selection, ensuring that the chosen features strike a balance between relevance and computational efficiency.
+The visualization of the number of features against cross-validation scores as shown by Figure 12 provides a clear and insightful depiction of the relationship between feature inclusion and model performance. The plot, with the number of features on the x-axis and cross-validation scores on the y-axis, offers a visual guide to discerning the optimal feature subset that maximizes predictive accuracy. 
+Red dot on the plot shows a feature subset with the best cross-validation score, that was later used to fit models. Similarly as in the previous approach, this subset with best r2 scored, performed best on the train set.
+Our analysis facilitates an informed decision-making process regarding feature selection, ensuring that the chosen features strike a balance between relevance and computational efficiency.
+
+#### c) Incorporation of PCA
 
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure 13.png")) 
+knitr::include_graphics(file.path(here(), "data", "pic", "figure_13.png"), dpi=10) 
 ```
 
-Our last approach involves utilizing Principal Component Analysis (PCA). By analyzing the cumulative sum of explained variance in relation to the number of principal components, we gained valuable insights into the optimal dimensionality reduction. In this context, Figure 13 depicts the cumulative sum of explained variance on the y-axis and the number of principal components on the x-axis. The inflection point in the plot signifies the optimal number of principal components that effectively capture the dataset's variability. Striking a balance between dimensionality reduction and retaining crucial information, this step contributed significantly to the refinement of our feature set. The best number of principal components at 28 serve as a judicious selection to preserve essential information while enhancing model efficiency.
+Our next approach involves utilizing Principal Component Analysis (PCA). 
+By analyzing the cumulative sum of explained variance in relation to the number of principal components, we gained valuable insights into the optimal dimensionality reduction. 
+In this context, Figure 13 depicts the cumulative sum of explained variance on the y-axis and the number of principal components on the x-axis. 
+Point marked with red dot in the plot, signifies the optimal number of principal components that effectively capture the dataset's variability. 
+Striking a balance between dimensionality reduction and retaining crucial information, this step contributed significantly to the refinement of our feature set. 
+The best number of principal components at 20 serve as a judicious selection to preserve essential information while enhancing model generalization capabilities.
 
-# Results
+#### d) Utilization of polynomial features
+
+The last approach to feature selection we used, was to add new features, created as polynomial combinations of existing features.
+We included polynomial relations of degree 2. This approach ensured that non-linear relationships between features, were included in the dataset.
+The assumption that there were non-linear relations in the dataset, was based on the baseline results of our selected models. 
+Support Vector Regressor that utilized non-linear kernels, achieved best r2 score.
+
+# Final results
+
+#### Table 2
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>baseline</th>
+      <th>lin reg features</th>
+      <th>skb features</th>
+      <th>pca</th>
+      <th>Polynomial features</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>lin_reg</th>
+      <td>0.709666</td>
+      <td>0.708340</td>
+      <td>0.709697</td>
+      <td>0.709684</td>
+      <td>0.746813</td>
+    </tr>
+    <tr>
+      <th>rf</th>
+      <td>0.714040</td>
+      <td>0.704838</td>
+      <td>0.713530</td>
+      <td>0.710483</td>
+      <td>0.715941</td>
+    </tr>
+    <tr>
+      <th>svr</th>
+      <td>0.747972</td>
+      <td>0.741367</td>
+      <td>0.748168</td>
+      <td>0.747972</td>
+      <td>0.737504</td>
+    </tr>
+    <tr>
+      <th>gbr</th>
+      <td>0.723740</td>
+      <td>0.718606</td>
+      <td>0.723827</td>
+      <td>0.704239</td>
+      <td>0.728260</td>
+    </tr>
+    <tr>
+      <th>elasticnet</th>
+      <td>0.707905</td>
+      <td>0.708032</td>
+      <td>0.707976</td>
+      <td>0.707652</td>
+      <td>0.742700</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+In our final project phase, we used all of the knowledge gained during data exploration and applied it to fit a group of models.
+Table 2 summarizes the results of our rigorous training and feature engineering experiments. Each row of the table contains r2 cross validation scores for given model, achieved on specific dataset.
+
+Based on table 2, we identified a combination of models and dataset that gave us the best CV r2 scores. It consisted of 6 models that improved their respective r2 scores in comparison with the baseline scores.
+These models were:
+
+ - SVR fitted on all features
+
+ - SVR fitted on F-score selected features
+
+ - SVR fitted on PCA transformed features
+
+ - Gradient Boosting Regressor fitted on F-score selected features
+
+ - Gradient Boosting Regressor fitted on polynomial features
+
+ - Linear regression with regularization (ElasticNet) fitted on polynomial features
+
+We scored each of these models on Kaggle and achieved the best score of 0.69698 for the ElasticNet model, and the worst score of 0.68465 for the Gradient Boosting Regressor fitted on F-score selected features.
+To better understand differences between our models, we did a thorough analysis of the results. Figure 14 shows differences in the distributions of predicted target value for the best and the worst models. 
 
 ```{r}
-knitr::include_graphics(file.path(here(), "data", "pic", "figure 14.png")) 
+knitr::include_graphics(file.path(here(), "data", "pic", "figure_14.png"), dpi=10) 
 ```
 
-As we can see from Figure 14, the SVR model, after rigorous training and feature engineering, emerged as the most powerful model for predicting our response variable, pSat_Pa.
 
-We also tried creating polynomial features up to the second degree from the original features and then evaluating the performance of the linear regression model using these polynomial features through cross-validation, however, this only resulted in a cross-validation R2 score of 0.7226. 
+Looking at the differences in predicted values distributions, gave us an idea to create an ensemble model, which would average the scores of the selected 6 models. 
+This approach achieved an r2 score of **0.70564** on Kaggle and turned out to be our best. 
 
-As a result, we strived to optimize the SVR model through parameter tuning, leading to improved predictive accuracy. The final SVR model, with a carefully selected set of parameters, demonstrated commendable performance, achieving an R2 score of 0.751 through cross-validation, and 0.695 on Kaggle.
 
 # Conclusion
 
@@ -461,7 +652,7 @@ The key insights that we obtained after this project are:
 
 - Feature selection techniques, encompassing linear regression coefficients, Sklearn's built-in methods, and Principal Component Analysis, constituted a nuanced process guided by the analysis of feature importance. 
 
-- Through this, we were able to acheive a holistic understanding of the dataset, engineer features, and select an appropriate regression model, helping us understand the meticulous feature selection process aimed at balancing model complexity and predictive accuracy.
+- Through this, we were able to achieve a holistic understanding of the dataset, engineer features, and select an appropriate regression model, helping us understand the meticulous feature selection process aimed at balancing model complexity and predictive accuracy.
 
 As well, in the iterative wrangling phase of creating our ML model, we identified additional wrangling needs to further refine our dataset. Firstly, we created an unscaled log base 10 version of the response variable, trans_log10_noscale_pSat_Pa, to potentially improve model performance. We also addressed the presence of outliers in the dataset. An outlier flag was introduced as a binary variable, flag_outlier, indicating whether a data point was considered an outlier based on predetermined criteria. These criteria involved examining the standardized values of the response variable, trans_log10_noscale_pSat_Pa, as well as the transformed variables trans_MW and trans_NumOfConf. Any case with at least one outlier was flagged with a value of 1, while non-outliers received a value of 0. The dataset with outlier flags, named gecko_ml_outlier_flag, was then used to create a new dataset, gecko_ml_no_outlier, by filtering out all cases flagged as outliers.
 
