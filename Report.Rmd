@@ -656,6 +656,18 @@ The key insights that we obtained after this project are:
 
 As well, in the iterative wrangling phase of creating our ML model, we identified additional wrangling needs to further refine our dataset. Firstly, we created an unscaled log base 10 version of the response variable, trans_log10_noscale_pSat_Pa, to potentially improve model performance. We also addressed the presence of outliers in the dataset. An outlier flag was introduced as a binary variable, flag_outlier, indicating whether a data point was considered an outlier based on predetermined criteria. These criteria involved examining the standardized values of the response variable, trans_log10_noscale_pSat_Pa, as well as the transformed variables trans_MW and trans_NumOfConf. Any case with at least one outlier was flagged with a value of 1, while non-outliers received a value of 0. The dataset with outlier flags, named gecko_ml_outlier_flag, was then used to create a new dataset, gecko_ml_no_outlier, by filtering out all cases flagged as outliers.
 
+# Key decisions and findings 
+
+Here we summarize our work into key decisions and findings that lead us to the current results.
+
+## Wrangling stage
+
+In the data, there is no clear borderline for some of the ordinal and continuous features. We set an arbitrary rule to distinguish based on the number of levels(n = 50 levels cutoff).  This allows for an organized strategy in treating and understanding the features. 
+
+Outliers were checked for continuous features. They were not handled in the original dataset due to our lack of domain knowledge. But during the modeling phase we discussed and created an additional dataset with outliers removed, to fit the model and compare the accuracy with initial models. 
+
+Initially, variables in test set were scaled using test mean and standard deviation. During the modeling phase, we reflected on the practice and decided to create a set of new scaled variables using the statistics in training set. 
+
 # Self-Grading Report
 
 Our group decided to give our deliverables a 5, as we believe that we demonstrated a comprehensive understanding of the project, and that we achieved exceptional results with a R2 score of 0.751. Furthermore, throughout our report, we applied relevant theory and skills that were amassed in the course and in other scientific sources. Our report and project utilized mature and detailed analysis of the data and the various machine learning approaches. Everything is succinct and addressed all potential doubts surrounding our model and feature selection. As well, our report clearly outlines key insights from the project, and demonstrates fundamental innovation and critical thinking. Finally, our deliverables are well-crafted, and are evident to be a Master's level research project.
