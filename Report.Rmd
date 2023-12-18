@@ -565,7 +565,7 @@ knitr::include_graphics(file.path(here(), "data", "pic", "figure_14.png"), dpi=1
 
 
 Looking at the differences in predicted values distributions, gave us an idea to create an ensemble model, which would average the scores of the selected 6 models. 
-This approach achieved an R2 score of **0.70564** on Kaggle and turned out to be our best. 
+This approach achieved an R2 score of **0.7207** for the basic competition, and **0.76453** for the advanced competition on Kaggle and turned out to be our best. 
 
 
 # Conclusion
@@ -586,7 +586,7 @@ The key insights that we obtained after this project are:
 
 - Four popular regression models—linear regression, random forest, support vector regressor, and gradient boosting regressor—were chosen, with Lasso regularization favored for linear regression based on cross-validation results. 
 
-- Feature selection techniques, encompassing linear regression coefficients, Sklearn's built-in methods, and Principal Component Analysis, constituted a nuanced process guided by the analysis of feature importance. 
+- Feature selection techniques, encompassing linear regression coefficients, Sklearn's built-in methods, Principal Component Analysis, and the utilization of polynomial features constituted a nuanced process guided by the analysis of feature importance. 
 
 - Through this, we were able to achieve a holistic understanding of the dataset, engineer features, and select an appropriate regression model, helping us understand the meticulous feature selection process aimed at balancing model complexity and predictive accuracy.
 
