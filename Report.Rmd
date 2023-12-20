@@ -568,41 +568,29 @@ Looking at the differences in predicted values distributions, gave us an idea to
 This approach achieved an R2 score of **0.7207** for the basic competition, and **0.76453** for the advanced competition on Kaggle and turned out to be our best. 
 
 
-# Conclusion
-
-The key insights that we obtained after this project are:
-
-- Diverse feature types, including discrete and continuous, prompted the application of one-hot encoding to handle the discrete feature ('parentspecies'). 
-
-- Continuous features underwent categorization as ordinal or continuous, with some being transformed to approximate normality for improved model performance. 
-
-- While outliers were examined, they were not addressed due to a lack of domain knowledge. 
-
-- Correlation analyses uncovered high co-linearity, particularly among features with "Num" in their names, suggesting potential redundancy. 
-
-- Novel variables, created through exploration, included a weighted sum of functional groups, an interaction term between molecular weight and hydroxyl groups, and principal components obtained via PCA. 
-
-- Use cases demonstrated the selection of variable subsets based on preferences, encompassing original, transformed, and one-hot-encoded features. 
-
-- Four popular regression models—linear regression, random forest, support vector regressor, and gradient boosting regressor—were chosen, with Lasso regularization favored for linear regression based on cross-validation results. 
-
-- Feature selection techniques, encompassing linear regression coefficients, Sklearn's built-in methods, Principal Component Analysis, and the utilization of polynomial features constituted a nuanced process guided by the analysis of feature importance. 
-
-- Through this, we were able to achieve a holistic understanding of the dataset, engineer features, and select an appropriate regression model, helping us understand the meticulous feature selection process aimed at balancing model complexity and predictive accuracy.
-
-As well, in the iterative wrangling phase of creating our ML model, we identified additional wrangling needs to further refine our dataset. Firstly, we created an unscaled log base 10 version of the response variable, trans_log10_noscale_pSat_Pa, to potentially improve model performance. We also addressed the presence of outliers in the dataset. An outlier flag was introduced as a binary variable, flag_outlier, indicating whether a data point was considered an outlier based on predetermined criteria. These criteria involved examining the standardized values of the response variable, trans_log10_noscale_pSat_Pa, as well as the transformed variables trans_MW and trans_NumOfConf. Any case with at least one outlier was flagged with a value of 1, while non-outliers received a value of 0. The dataset with outlier flags, named gecko_ml_outlier_flag, was then used to create a new dataset, gecko_ml_no_outlier, by filtering out all cases flagged as outliers.
-
 # Key Decisions and Findings 
 
 Here we summarize our work into key decisions and findings that lead us to the current results.
 
-## Wrangling Stage
+- In the data, there is no clear borderline for some of the ordinal and continuous features. We set an arbitrary rule to distinguish them based on the number of levels (50 levels was our cutoff).  This allowed for an organized strategy in treating and understanding the features. 
 
-In the data, there is no clear borderline for some of the ordinal and continuous features. We set an arbitrary rule to distinguish based on the number of levels(n = 50 levels cutoff).  This allows for an organized strategy in treating and understanding the features. 
+- Continuous features were checked for outliers. They were not handled in the original dataset due to our lack of domain knowledge. But during the modeling phase we discussed and created an additional dataset with outliers removed, to fit the model and compare the accuracy with initial models. 
 
-Outliers were checked for continuous features. They were not handled in the original dataset due to our lack of domain knowledge. But during the modeling phase we discussed and created an additional dataset with outliers removed, to fit the model and compare the accuracy with initial models. 
+- Correlation analyses uncovered co-linearity, particularly among features with "Num" in their names, suggesting potential redundancy. 
 
-Initially, variables in test set were scaled using the test mean and standard deviation. During the modeling phase, we reflected on the practice and decided to create a set of new scaled variables using the statistics in training set. 
+- Feature selection techniques, encompassing feautre importance metrics, Principal Component Analysis, and the utilization of polynomial features constituted our nuanced feature engineering process. 
+
+- Four popular regression models—linear regression, random forest, support vector regressor, and gradient boosting regressor—were chosen to solve the problem, as a representative group of diverse ML methods learned during the course. 
+
+- Throughout the project, we were able to achieve a holistic understanding of the dataset, engineer features, and select an appropriate regression model, helping us understand the intricate balancing process of model complexity and predictive accuracy.
+
+- During our work on the project, we iteratively refined our data wrangling and model selection. We tried many different approaches to improve our solution, but many of these didn't give us the expected gains, and so were not documented in this report.
+
+# Conclusions
+
+This project gave us a unique experience of trying to solve a difficult problem with machine learning. We learned about every stage of such process,
+starting from data wrangling and ending with a presentation of our solution. All of this has been extremely valuable. We are happy with our outcomes, 
+but are also aware that with a bit more time we could have come up with an even better solution.  
 
 # Self-Grading Report
 
